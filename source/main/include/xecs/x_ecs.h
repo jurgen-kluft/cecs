@@ -43,8 +43,8 @@ namespace xcore
     void   g_ecs_destroy(ecs_t* r);
 
     // Registers a component type and returns its type information
-    cp_type_t g_register_component_type(ecs_t* r, const char* name);  // global group
-    cp_type_t g_register_component_type(ecs_t* r, const char* group, const char* name); // register a component under an existing (or new) group
+    cp_type_t g_register_component_type(ecs_t* r, const char* name, u32 component_sizeof);  // global group
+    cp_type_t g_register_component_type(ecs_t* r, const char* group, const char* name, u32 component_sizeof); // register a component under an existing (or new) group
 
     // Creates a new entity and returns it
     // The identifier can be:
