@@ -7,14 +7,6 @@
 
 namespace xcore
 {
-    // Component Type identifier information.
-    struct cp_type_t
-    {
-        u32         cp_id;       // unique component id
-        u32         cp_sizeof;   // component sizeof
-        const char* name;        // component name
-    };
-
     // Opaque 32 bits entity identifier.
     //
     // A 32 bits entity identifier guarantees:
@@ -36,6 +28,7 @@ namespace xcore
     entity_t     g_touch_entity(entity_id_t id, entity_ver_t version); // Makes a entity_t from entity_id and entity_version
 
     extern const entity_t g_null_entity;
+
     // clang-format on
 
     struct ecs_t;
@@ -43,8 +36,37 @@ namespace xcore
     void   g_ecs_destroy(ecs_t* r);
 
     // Registers a component type and returns its type information
-    cp_type_t g_register_component_type(ecs_t* r, const char* name, u32 component_sizeof);  // global group
-    cp_type_t g_register_component_type(ecs_t* r, const char* group, const char* name, u32 component_sizeof); // register a component under an existing (or new) group
+    struct cp_type_t { u32 cp_id; u32 group_id; u32 cp_sizeof; const char* name; };
+    u32       g_ecs_unique_cp_id(ecs_t* r);
+    u32       g_ecs_unique_group_id(ecs_t* r);
+    cp_type_t g_register_component_type(ecs_t* r, u32 cp_id, u32 group_id, u32 cp_sizeof, const char* cpname, const char* group); // register a component under an existing (or new) group
+    cp_type_t g_register_component_type(ecs_t* r, u32 cp_id, u32 cp_sizeof, const char* cpname);  // global group
+
+    // Component Type identifier information.
+    template<typename T>
+    class cp_info_t
+    {
+    public:
+    };
+
+    template<typename T>
+    cp_type_t g_register_component_type(ecs_t* r)
+    {
+        if (cp_info_t<T>::get_id() == 0xffffffff)
+            cp_info_t<T>::set_id(g_ecs_unique_cp_id(r));
+
+        return g_register_component_type(r, cp_info_t<T>::get_id(), sizeof(T), cp_info_t<T>::name());
+    }
+    template<typename T, typename G>
+    cp_type_t g_register_component_type(ecs_t* r)
+    {
+        if (cp_info_t<T>::get_id() == 0xffffffff)
+            cp_info_t<T>::set_id(g_ecs_unique_cp_id(r));
+        if (G::get_id() == 0xffffffff)
+            G::set_id(g_ecs_unique_group_id(r));
+
+        return g_register_component_type(r, cp_info_t<T>::get_id(), G::get_id(), sizeof(T), cp_info_t<T>::name(), G::name());
+    }
 
     // Creates a new entity and returns it
     // The identifier can be:

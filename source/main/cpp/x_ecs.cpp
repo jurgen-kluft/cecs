@@ -10,12 +10,33 @@ namespace xcore
     entity_id_t  g_entity_identifier(entity_t e) { return {e & DE_ENTITY_ID_MASK}; }
     entity_t     g_make_entity(entity_id_t id, entity_ver_t version) { return id.id | (version.ver << DE_ENTITY_SHIFT); }
 
-    void* malloc(size_t size) { return nullptr; }
-    void* realloc(void* ptr, size_t new_size) { return nullptr; }
+    void* malloc(xsize_t size) { return nullptr; }
+    void* realloc(void* ptr, xsize_t new_size) { return nullptr; }
     void  free(void* ptr) {}
 
     void memset(void* ptr, u32 c, u32 length) {}
     void memmove(void* dst, void* src, u32 length) {}
+
+    cp_type_t g_register_component_type(ecs_t* r, u32 cp_id, u32 group_id, u32 cp_sizeof, const char* cpname, const char* group)
+    {
+        cp_type_t c;
+        c.cp_id = cp_id;
+        c.group_id = group_id;
+        c.cp_sizeof = cp_sizeof;
+        c.name = cpname;
+        return c;
+    }
+
+    cp_type_t g_register_component_type(ecs_t* r, u32 cp_id, u32 cp_sizeof, const char* cpname)
+    {
+        cp_type_t c;
+        c.cp_id = cp_id;
+        c.group_id = 0;
+        c.cp_sizeof = cp_sizeof;
+        c.name = cpname;
+        return c;
+    }
+
 
     // SPARSE SET
 
@@ -295,7 +316,20 @@ namespace xcore
         u32             entities_size;
         entity_t*       entities;     /* contains all the created entities */
         entity_id_t     available_id; /* first index in the list to recycle */
+        u32             unique_cp_id;
+        u32             unique_group_id;
     };
+
+    u32       g_ecs_unique_cp_id(ecs_t* r)
+    {
+        return r->unique_cp_id++;
+    }
+    
+    u32       g_ecs_unique_group_id(ecs_t* r)
+    {
+        return r->unique_group_id++;
+    }
+
 
     ecs_t* g_ecs_create()
     {
@@ -307,6 +341,8 @@ namespace xcore
             r->available_id.id = g_null_entity;
             r->entities_size   = 0;
             r->entities        = 0;
+            r->unique_cp_id    = 0;
+            r->unique_group_id = 1;
         }
         return r;
     }
