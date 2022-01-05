@@ -19,12 +19,15 @@ namespace xcore
     typedef u32 entity_t;
     struct entity_ver_t { u32 ver; };
     struct entity_id_t { u32 id; };
+    struct entity_gx_t { u32 gx; };
 
-    #define DE_ENTITY_ID_MASK       ((u32)0x3FFFFF) // Mask to use to get the entity number out of an identifier
-    #define DE_ENTITY_VERSION_MASK  ((u32)0xFFC)    // Mask to use to get the version out of an identifier
-    #define DE_ENTITY_SHIFT         ((s8)22)        // Extent of the entity number within an identifier
-    entity_ver_t g_entity_version(entity_t e);                         // Returns the version part of the entity
-    entity_id_t  g_entity_identifier(entity_t e);                      // Returns the id part of the entity
+    #define ECS_ENTITY_ID_MASK       ((u32)0x000FFFFF)   // Mask to use to get the entity number out of an identifier (1 M)
+    #define ECS_ENTITY_TYPE_MASK     ((u32)0x0FF00000)   // Mask to use to get the entity group out of an identifier (32)
+    #define ECS_ENTITY_VERSION_MASK  ((u32)0xF0000000)   // Mask to use to get the version out of an identifier
+    #define ECS_ENTITY_SHIFT         ((s8)20)            // Extent of the entity number within an identifier
+    entity_ver_t g_entity_version(entity_t e);           // Returns the version part of the entity
+    entity_id_t  g_entity_identifier(entity_t e);        // Returns the id part of the entity
+    entity_gx_t  g_entity_group(entity_t e);             // Returns the group part of the entity
     entity_t     g_touch_entity(entity_id_t id, entity_ver_t version); // Makes a entity_t from entity_id and entity_version
 
     extern const entity_t g_null_entity;
@@ -35,38 +38,34 @@ namespace xcore
     ecs_t* g_ecs_create();
     void   g_ecs_destroy(ecs_t* r);
 
-    // Registers a component type and returns its type information
-    struct cp_type_t { u32 cp_id; u32 group_id; u32 cp_sizeof; const char* name; };
-    u32       g_ecs_unique_cp_id(ecs_t* r);
-    u32       g_ecs_unique_group_id(ecs_t* r);
-    cp_type_t g_register_component_type(ecs_t* r, u32 cp_id, u32 group_id, u32 cp_sizeof, const char* cpname, const char* group); // register a component under an existing (or new) group
-    cp_type_t g_register_component_type(ecs_t* r, u32 cp_id, u32 cp_sizeof, const char* cpname);  // global group
-
     // Component Type identifier information.
-    template<typename T>
-    class cp_info_t
+    struct cp_type_t
     {
-    public:
+        inline cp_type_t(u32 id, u32 sizeofcp, const char* name, const char* tag)
+            : cp_id(id)
+            , cp_sizeof(sizeofcp)
+            , cp_name(name)
+            , cp_tag(tag)
+        {
+        }
+        u32 const         cp_id;
+        u32 const         cp_sizeof;
+        const char* const cp_name;
+        const char* const cp_tag;
     };
 
-    template<typename T>
-    cp_type_t g_register_component_type(ecs_t* r)
-    {
-        if (cp_info_t<T>::get_id() == 0xffffffff)
-            cp_info_t<T>::set_id(g_ecs_unique_cp_id(r));
+    // Registers a component type and returns its type information
+    cp_type_t g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cpname, const char* cptag = "global");
 
-        return g_register_component_type(r, cp_info_t<T>::get_id(), sizeof(T), cp_info_t<T>::name());
-    }
-    template<typename T, typename G>
-    cp_type_t g_register_component_type(ecs_t* r)
-    {
-        if (cp_info_t<T>::get_id() == 0xffffffff)
-            cp_info_t<T>::set_id(g_ecs_unique_cp_id(r));
-        if (G::get_id() == 0xffffffff)
-            G::set_id(g_ecs_unique_group_id(r));
+    template <typename T> inline const char* nameof() { return "?"; }
 
-        return g_register_component_type(r, cp_info_t<T>::get_id(), G::get_id(), sizeof(T), cp_info_t<T>::name(), G::name());
-    }
+    struct ecs_cp_tag_global_t
+    {
+    };
+
+    template <> inline const char* nameof<ecs_cp_tag_global_t>() { return "global"; }
+
+    template <typename T, typename Tag = ecs_cp_tag_global_t> cp_type_t g_register_component_type(ecs_t* r) { return g_register_component_type(r, sizeof(T), nameof<T>(), nameof<Tag>()); }
 
     // Creates a new entity and returns it
     // The identifier can be:
@@ -133,21 +132,21 @@ namespace xcore
     //    Warning: Using an invalid entity results in undefined behavior.
     bool g_orphan(ecs_t* r, entity_t e);
 
-    //    Iterates all the entities that are orphans (no components in it) and calls
+    //    Iterates all the entities that are orphans (no component in it) and calls
     //    the function pointer for each one.
     //    This is a fairly slow operation and should not be used frequently.
     //    However it's useful for iterating all the entities still in use,
     //    regarding their components.
     void g_orphans_each(ecs_t* r, void (*fun)(ecs_t*, entity_t, void*), void* udata);
 
-    struct ecs_storage_t;
+    struct ecs_cp_store_t;
 
     // Use this view to iterate entities that have the component type specified.
     struct ecs_view_single_t
     {
-        ecs_storage_t* pool; // de_storage opaque pointer
-        u32            current_entity_index;
-        entity_t       entity;
+        ecs_cp_store_t* storage;
+        u32             current_entity_index;
+        entity_t        entity;
     };
 
     ecs_view_single_t g_create_view_single(ecs_t* r, cp_type_t cp_type);
@@ -160,17 +159,17 @@ namespace xcore
     //     Use this view to iterate entities that have multiple component types specified.
     //
     //     Note: You don't need to destroy the view because it doesn't allocate and it
-    //     is not recommended that you save a view. Just use de_create_view each time.
+    //     is not recommended that you save a view. Just use g_create_view each time.
     //     It's a "cheap" operation.
     //
     //     Example usage with two components:
     //
-    //     for (ecs_view_t v = de_create_view(r, 2, (cp_type_t[2]) {transform_type, velocity_type }); de_view_valid(&v); de_view_next(&v)) {
-    //         entity_t e = de_view_entity(&v);
-    //         transform* tr = de_view_get(&v, transform_type);
-    //         velocity* tc = de_view_get(&v, velocity_type);
-    //         printf("transform  entity: %d => x=%d, y=%d, z=%d\n", de_entity_identifier(e).id, tr->x, tr->y, tr->z);
-    //         printf("velocity  entity: %d => w=%f\n", de_entity_identifier(e).id, tc->v);
+    //     for (ecs_view_t v = g_create_view(r, 2, (cp_type_t[2]) {transform_type, velocity_type }); g_view_valid(&v); g_view_next(&v)) {
+    //         entity_t e = g_view_entity(&v);
+    //         transform* tr = g_view_get(&v, transform_type);
+    //         velocity* tc = g_view_get(&v, velocity_type);
+    //         printf("transform  entity: %d => x=%d, y=%d, z=%d\n", g_entity_identifier(e).id, tr->x, tr->y, tr->z);
+    //         printf("velocity  entity: %d => w=%f\n", g_entity_identifier(e).id, tc->v);
     //     }
     struct ecs_view_t
     {
@@ -180,12 +179,12 @@ namespace xcore
         };
 
         // value is the component id, index is where is located in the all_pools array
-        u32            to_pool_index[MAX_VIEW_COMPONENTS];
-        ecs_storage_t* all_pools[MAX_VIEW_COMPONENTS];
-        u32            pool_count;
-        ecs_storage_t* pool;
-        u32            current_entity_index;
-        entity_t       current_entity;
+        u32             to_pool_index[MAX_VIEW_COMPONENTS];
+        ecs_cp_store_t* all_pools[MAX_VIEW_COMPONENTS];
+        u32             pool_count;
+        ecs_cp_store_t* pool;
+        u32             current_entity_index;
+        entity_t        current_entity;
     };
 
     ecs_view_t g_create_view(ecs_t* r, u32 cp_count, cp_type_t* cp_types);
