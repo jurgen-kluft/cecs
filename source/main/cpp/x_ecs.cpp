@@ -5,6 +5,57 @@
 
 namespace xcore
 {
+    // The primary goals of this ecs:
+    //   1) iterators are easy and fast
+    //   2) creating an entity is fast
+    //   3) adding components is fast
+    //   4) removal of a component is fast, but a negative impact on iteration (can be fixed by consolidation call)
+    //   5) destroying an entity is fast
+
+    // Should we impose constraints like:
+    //   - Maximum number of components
+    //   - Maximum number of entities
+    //   - Maximum number of components per entity
+
+    // Entity Functions
+    // ----------------
+    //
+    // How to implement the following as well:
+    //   - Entity::HasAnyComponent()
+    //   - Entity::HasComponent(cp_type_t)
+    //   - Entity::RemoveComponent(entity_t, cp_type_t)
+    // 
+
+    // Entity Systems
+    // --------------
+    //
+    // Furthermore, how would we be able to collect entities that get a component X attached.
+    // For example, if a 'system' wants to keep track of entities that have certain components 
+    // they would need to be able to receive specific events.
+    // 
+
+    // Entities+Components Iterators
+    // -----------------------------
+    // 
+    // 1. Iterators are easy and fast:
+    //    
+    //    Iterating over entities that have one or more the same components:
+    //    e.g. 
+    //            ecs::iterator it = begin<position_t, velocity_t, scale_t>();
+    //            ecs::iterator it = begin<position_t, velocity_t, scale_t>(ecs_not<threat_t>(ecs));
+    //            while (it.valid())
+    //            { 
+    //                entity_t ent = *it; 
+    //                position_t* pos = it.get_cp<position_t>(); 
+    //                velocity_t* vel = it.get_cp<velocity_t>();
+    //                ++it;
+    //            }
+    // 
+    // If entities and their are always in-order in their storage, the iterator would only have to 
+    // increment pointers on each [entity_id,component] array and keeping the entity_id in sync.
+    // Also the component data is visited in-order.
+    // 
+
     const entity_t g_null_entity = (entity_t)ECS_ENTITY_ID_MASK;
 
     entity_ver_t g_entity_version(entity_t e) { return {e >> ECS_ENTITY_SHIFT}; }
@@ -18,40 +69,6 @@ namespace xcore
     void memset(void* ptr, u32 c, u32 length) {}
     void memmove(void* dst, void* src, u32 length) {}
 
-    // SPARSE SET
-
-    /*
-        storage_map_t:
-
-        How the components mapping set works?
-        The main idea comes from ENTT C++ library:
-        https://github.com/skypjack/entt
-        https://github.com/skypjack/entt/wiki/Crash-Course:-entity-component-system#views
-        (Credits to skypjack) for the awesome library.
-        We have an mapping array that maps entity identifiers to the dense array indices that contains the full entity.
-        mapping array:
-        mapping => contains the index in the dense array of an entity identifier (without version)
-        that means that the index of this array is the entity identifier (without version) and
-        the content is the index of the dense array.
-        dense array:
-        dense => contains all the entities (entity_t).
-        the index is just that, has no meaning here, it's referenced in the mapping.
-        the content is the entity_t.
-        this allows fast iteration on each entity using the dense array or
-        lookup for an entity position in the dense using the mapping array.
-        ---------- Example:
-        Adding:
-        entity_t = 3 => (e3)
-        entity_t = 1 => (e1)
-        In order to check the entities first in the mapping, we have to retrieve the entity_id_t part of the entity_t.
-        The entity_id_t part will be used to index the mapping array.
-        The full entity_t will be the value in the dense array.
-                               0    1     2    3
-        mapping idx:         eid0 eid1  eid2  eid3    this is the array index based on entity_id_t (NO VERSION)
-        mapping content:   [ null,   1, null,   0 ]   this is the array content. (index in the dense array)
-        dense         idx:    0    1
-        dense     content: [ e3,  e2]
-    */
     struct storage_map_t
     {
         storage_map_t()
