@@ -5,53 +5,135 @@
 
 namespace xcore
 {
-    struct entity_info_t
+    struct en_inf_t
     {
-        u32 m_index;    // the group/entity index
-        u16 m_groups;   // each bit tells us if we also exist in group1_t/group2_t/.../group16_t/.../group32_t
-        u16 m_cp_count; // number of components
+        u32 m_cpi_index;  // the cp_array index / entity index
+        u32 m_cpi_bitset; // quick check to see if we have a component in [(n/8), (n/8)+8]
     };
 
     // Each group covers N components
     // The ecs has 32 different groups where each group limits the number of components are held
     // 0:8/1:16/2:24/3:32/4:40 etc..
-    struct group_t
+    struct cp_inf_t
     {
-        u32 m_entity_index; // The owner (top byte is hierarchical bits for m_cp_bitset[8])
+        u32 m_entity_index; // The owner of this struct
+
+        u8 m_cp_bitcnt[4]; // How many bits are set before m_cp_bitset[i]
         union
         {
-            u8  m_cp_bitset[32]; // 256 bits
-            u64 m_cp_bitset[4];  // 256 bits
+            u8 m_cp_bitset8[32];  // 256 bits
+            u64 m_cp_bitset64[4]; // 256 bits
         };
-        u32 m_cp_data_offset[]; // N-size, depends on the actual group
+        // N-size, depends on the actual group
+        // Furthermore, each offset is 3 bytes, not 4, that is why we are a multiple of 4
+        u32 m_cp_data_offset[];
     };
 
     // when a component is removed we can easily swap it with the last one
     // and update the information in the specific group_t.
-    struct component_store_t
+    struct cp_store_t
     {
-        void* component_data;
-        u32*  entity_ids; // each one is a group-index/entity-index
-        u32   size;
-        u32   cap;
+        void *cp_data;
+        u32 *entity_ids;
+        u32 size;
+        u32 cap;
     };
 
-    static void remove_from_component_store(u32 index, u32& update_index, u32& update_offset) {}
+    struct cpi_array_t
+    {
+        u32 cpi_array_size;
+        u32 cpi_array_cap;
+        cp_inf_t *cpi_arrays;
+    };
 
     struct ecs2_t
     {
-        component_store_t component_stores[256];
-        u32               entity_group_size[32];
-        u32               entity_group_cap[32];
-        group_t*          entity_groups[32];
-        u32               entity_array_size;
-        u32               entity_array_cap;
-        entity_info_t*    entity_array;
+        u64 cp_stores_bitset[4]; // To identify which components are still free (to give out new component id)
+        cp_store_t cp_stores[256];
+        cpi_array_t entity_cpi_arrays[32];
+
+        u32 entity_array_size;
+        u32 entity_array_cap;
+        en_inf_t *entity_array;
     };
 
-    static bool entity_has_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp) { return false; }
+    static void cp_store_dealloc_cp(cp_store_t *cp_store, u32 index, u32 &update_index, u32 &update_offset)
+    {
+        // remove a component from this store and return some information of which entity
+        // needs an update regarding this store. The reason being that we have swapped
+        // the last entry into the removed entry.
+        // what if we removed the last entry?
+    }
 
-    static bool entity_remove_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp) { return false; }
+    static u32 cp_store_alloc_cp(cp_store_t *cp_store)
+    {
+        // return index of newly allocated component
+        return 0;
+    }
+
+    inline u8 s_get_cp_inf_index(u16 cp_count)
+    {
+        // per 8, gives 32 array's to cover 256 components
+        // each of those array's can be tightly packed (using swap-remove)
+        return (cp_count >> 3) - 1;
+    }
+
+    static inline u32 s_get_cp_index(cp_inf_t const *cp_inf, u32 cpi_bitset, u16 cp_id)
+    {
+        u8 const ci = cp_id >> 6;
+        s8 i = xfindFirstBit(cp_inf->m_cp_bitset64[ci]);
+        i += cp_info->m_cp_bitcnt[(ci - 1) & 0x3];
+        return i;
+    }
+
+    static bool entity_has_component(ecs2_t *ecs, entity_t e, cp_type_t const &cp)
+    {
+        en_inf_t *ei = ecs->entity_array[g_entity_id(e)];
+        u8 const cpi = cp.cp_id / 8;
+        if ((ei->m_cpi_bitset & (1 << cpi)) != 0)
+        {
+            // We do have a component in that range
+            u8 const cpi_array_index = ei->m_cpi_index >> 24;
+            cp_inf_t const *cp_inf = ecs->entity_cpi_arrays[cpi_array_index] + (ei->m_cpi_index & 0x00FFFFFF);
+            u8 const cpib = 1 << (cp.cp_id & 0x7);
+            if ((cp_info->m_cp_bitset8[cpi] & cpib) != 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static void entity_set_component(ecs2_t *ecs, entity_t e, cp_type_t const &cp)
+    {
+        // set/register a component on an entity.
+        // Depending on the bit position we need to insert an index into the cp_inf->m_cp_data_offset[] array, this
+        // means moving up some entries.
+        // NOTE: we might need to grow to a larger cp_inf_t.
+    }
+
+    static void *entity_get_component(ecs2_t *ecs, entity_t e, cp_type_t const &cp)
+    {
+        en_inf_t *ei = ecs->entity_array[g_entity_id(e)];
+        u8 const cpi = cp.cp_id / 8;
+        if ((ei->m_cpi_bitset & (1 << cpi)) != 0)
+        {
+            // We do have a component in that range
+            u8 const cpi_array_index = ei->m_cpi_index >> 24;
+            cp_inf_t const *cp_inf = ecs->entity_cpi_arrays[cpi_array_index] + (ei->m_cpi_index & 0x00FFFFFF);
+            u8 const cpib = 1 << (cp.cp_id & 0x7);
+            if ((cp_inf->m_cp_bitset8[cpi] & cpib) != 0)
+            {
+                // Now we need to compute the index into the m_cp_data_offset array, this means we need to
+                // count the number of bits set before [cpi]:cpib.
+                u32 const cp_data_index = s_get_cp_index(cp_inf, ei->m_cpi_bitset, cp.cp_id);
+                return cp_inf->m_cp_data_offset[cp_data_index];
+            }
+        }
+        return nullptr;
+    }
+
+    static bool entity_remove_component(ecs2_t *ecs, entity_t e, cp_type_t const &cp) { return false; }
 
     // The primary goals of this ecs:
     //   1) iterators are easy and fast
@@ -101,11 +183,11 @@ namespace xcore
     //
     struct iterator_t
     {
-        entity_t* cp_entity[32];
-        void*     cp_data[32];
-        u32       cp_sizes[32];
-        u32       cp_count;
-        entity_t  current;
+        entity_t *cp_entity[32];
+        void *cp_data[32];
+        u32 cp_sizes[32];
+        u32 cp_count;
+        entity_t current;
 
         void begin() {}
 
@@ -126,57 +208,53 @@ namespace xcore
     const entity_t g_null_entity = (entity_t)ECS_ENTITY_ID_MASK;
 
     entity_ver_t g_entity_version(entity_t e) { return {e >> ECS_ENTITY_SHIFT}; }
-    entity_id_t  g_entity_identifier(entity_t e) { return {e & ECS_ENTITY_ID_MASK}; }
-    entity_t     g_make_entity(entity_id_t id, entity_ver_t version) { return id.id | (version.ver << ECS_ENTITY_SHIFT); }
+    entity_id_t g_entity_identifier(entity_t e) { return {e & ECS_ENTITY_ID_MASK}; }
+    entity_t g_make_entity(entity_id_t id, entity_ver_t version) { return id.id | (version.ver << ECS_ENTITY_SHIFT); }
 
-    void* malloc(xsize_t size) { return nullptr; }
-    void* realloc(void* ptr, xsize_t new_size) { return nullptr; }
-    void  free(void* ptr) {}
+    void *malloc(xsize_t size) { return nullptr; }
+    void *realloc(void *ptr, xsize_t new_size) { return nullptr; }
+    void free(void *ptr) {}
 
-    void memset(void* ptr, u32 c, u32 length) {}
-    void memmove(void* dst, void* src, u32 length) {}
+    void memset(void *ptr, u32 c, u32 length) {}
+    void memmove(void *dst, void *src, u32 length) {}
 
     struct storage_map_t
     {
         storage_map_t()
-            : sparse(nullptr)
-            , dense(nullptr)
-            , cpset(nullptr)
-            , sparse_size(0)
-            , dense_size(0)
+            : sparse(nullptr), dense(nullptr), cpset(nullptr), sparse_size(0), dense_size(0)
         {
         }
 
         //  mapping entity identifiers indices array.
         //  - index is the entity id. (without version)
         //  - value is the index into the dense array
-        entity_t* sparse;
+        entity_t *sparse;
 
         //  has component bitfield per entity
         //  - each bit index value is the index into the cp data array
         //  = is dense
-        u8* cpset;
+        u8 *cpset;
 
         // Dense entities array.
         // - index is linked with the mapping value.
         // - value is the full entity_t
-        entity_t* dense;
+        entity_t *dense;
 
         u32 sparse_size;
         u32 dense_size;
     };
 
-    static storage_map_t* s_sparse_new()
+    static storage_map_t *s_sparse_new()
     {
-        storage_map_t* mapping = (storage_map_t*)malloc(sizeof(storage_map_t));
-        mapping->sparse        = nullptr;
-        mapping->sparse_size   = 0;
-        mapping->dense         = nullptr;
-        mapping->dense_size    = 0;
+        storage_map_t *mapping = (storage_map_t *)malloc(sizeof(storage_map_t));
+        mapping->sparse = nullptr;
+        mapping->sparse_size = 0;
+        mapping->dense = nullptr;
+        mapping->dense_size = 0;
         return mapping;
     }
 
-    static void s_sparse_destroy(storage_map_t* s)
+    static void s_sparse_destroy(storage_map_t *s)
     {
         if (s)
         {
@@ -185,13 +263,13 @@ namespace xcore
         }
     }
 
-    static void s_sparse_delete(storage_map_t* s)
+    static void s_sparse_delete(storage_map_t *s)
     {
         s_sparse_destroy(s);
         free(s);
     }
 
-    static bool s_sparse_contains(storage_map_t* s, entity_t e)
+    static bool s_sparse_contains(storage_map_t *s, entity_t e)
     {
         ASSERT(s);
         ASSERT(e != g_null_entity);
@@ -199,14 +277,14 @@ namespace xcore
         return (eid.id < s->sparse_size) && (s->sparse[eid.id] != g_null_entity);
     }
 
-    static u32 s_sparse_index(storage_map_t* s, entity_t e)
+    static u32 s_sparse_index(storage_map_t *s, entity_t e)
     {
         ASSERT(s);
         ASSERT(s_sparse_contains(s, e));
         return s->sparse[g_entity_identifier(e).id];
     }
 
-    static void s_sparse_emplace(storage_map_t* s, entity_t e)
+    static void s_sparse_emplace(storage_map_t *s, entity_t e)
     {
         ASSERT(s);
         ASSERT(e != g_null_entity);
@@ -214,29 +292,29 @@ namespace xcore
         if (eid.id >= s->sparse_size)
         { // check if we need to realloc
             const u32 new_sparse_size = eid.id + 1;
-            s->sparse                 = (entity_t*)realloc(s->sparse, new_sparse_size * sizeof *s->sparse);
+            s->sparse = (entity_t *)realloc(s->sparse, new_sparse_size * sizeof *s->sparse);
             memset(s->sparse + s->sparse_size, g_null_entity, (new_sparse_size - s->sparse_size) * sizeof *s->sparse);
             s->sparse_size = new_sparse_size;
         }
-        s->sparse[eid.id]       = (entity_t)s->dense_size; // set this eid index to the last dense index (dense_size)
-        s->dense                = (entity_t*)realloc(s->dense, (s->dense_size + 1) * sizeof *s->dense);
+        s->sparse[eid.id] = (entity_t)s->dense_size; // set this eid index to the last dense index (dense_size)
+        s->dense = (entity_t *)realloc(s->dense, (s->dense_size + 1) * sizeof *s->dense);
         s->dense[s->dense_size] = e;
         s->dense_size++;
     }
 
-    static u32 s_sparse_remove(storage_map_t* s, entity_t e)
+    static u32 s_sparse_remove(storage_map_t *s, entity_t e)
     {
         ASSERT(s);
         ASSERT(s_sparse_contains(s, e));
 
-        const u32      pos   = s->sparse[g_entity_identifier(e).id];
+        const u32 pos = s->sparse[g_entity_identifier(e).id];
         const entity_t other = s->dense[s->dense_size - 1];
 
         s->sparse[g_entity_identifier(other).id] = (entity_t)pos;
-        s->dense[pos]                            = other;
-        s->sparse[pos]                           = g_null_entity;
+        s->dense[pos] = other;
+        s->sparse[pos] = g_null_entity;
 
-        s->dense = (entity_t*)realloc(s->dense, (s->dense_size - 1) * sizeof *s->dense);
+        s->dense = (entity_t *)realloc(s->dense, (s->dense_size - 1) * sizeof *s->dense);
         s->dense_size--;
 
         return pos;
@@ -244,24 +322,24 @@ namespace xcore
 
     struct ecs_cp_store_t
     {
-        u32           cp_id;        // component id for this storage
-        void*         cp_data;      // packed component elements array. aligned with mapping->dense
-        u32           cp_data_size; // number of elements in the cp_data array
-        u32           cp_sizeof;    // sizeof for each cp_data element
+        u32 cp_id;        // component id for this storage
+        void *cp_data;    // packed component elements array. aligned with mapping->dense
+        u32 cp_data_size; // number of elements in the cp_data array
+        u32 cp_sizeof;    // sizeof for each cp_data element
         storage_map_t mapping;
     };
 
-    static ecs_cp_store_t* s_storage_new(u32 cp_size, u32 cp_id)
+    static ecs_cp_store_t *s_storage_new(u32 cp_size, u32 cp_id)
     {
-        ecs_cp_store_t* s = (ecs_cp_store_t*)malloc(sizeof(ecs_cp_store_t));
-        s->cp_id          = cp_id;
-        s->cp_data        = nullptr;
-        s->cp_data_size   = 0;
-        s->cp_sizeof      = cp_size;
+        ecs_cp_store_t *s = (ecs_cp_store_t *)malloc(sizeof(ecs_cp_store_t));
+        s->cp_id = cp_id;
+        s->cp_data = nullptr;
+        s->cp_data_size = 0;
+        s->cp_sizeof = cp_size;
         return s;
     }
 
-    static void s_storage_destroy(ecs_cp_store_t* s)
+    static void s_storage_destroy(ecs_cp_store_t *s)
     {
         if (s)
         {
@@ -270,13 +348,13 @@ namespace xcore
         }
     }
 
-    static void s_storage_delete(ecs_cp_store_t* s)
+    static void s_storage_delete(ecs_cp_store_t *s)
     {
         s_storage_destroy(s);
         free(s);
     }
 
-    static void* s_storage_emplace(ecs_cp_store_t* s, entity_t e)
+    static void *s_storage_emplace(ecs_cp_store_t *s, entity_t e)
     {
         ASSERT(s);
 
@@ -285,7 +363,7 @@ namespace xcore
         s->cp_data_size++;
 
         // return the component data pointer (last position)
-        void* cp_data_ptr = &((char*)s->cp_data)[(s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof];
+        void *cp_data_ptr = &((char *)s->cp_data)[(s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof];
 
         // then add the entity to the mapping set
         s_sparse_emplace(&s->mapping, e);
@@ -293,41 +371,41 @@ namespace xcore
         return cp_data_ptr;
     }
 
-    static void s_storage_remove(ecs_cp_store_t* s, entity_t e)
+    static void s_storage_remove(ecs_cp_store_t *s, entity_t e)
     {
         ASSERT(s);
         u32 pos_to_remove = s_sparse_remove(&s->mapping, e);
 
         // swap (memmove because if cp_data_size 1 it will overlap dst and source.
-        memmove(&((char*)s->cp_data)[pos_to_remove * sizeof(char) * s->cp_sizeof], &((char*)s->cp_data)[(s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof], s->cp_sizeof);
+        memmove(&((char *)s->cp_data)[pos_to_remove * sizeof(char) * s->cp_sizeof], &((char *)s->cp_data)[(s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof], s->cp_sizeof);
 
         // and pop
         s->cp_data = realloc(s->cp_data, (s->cp_data_size - 1) * sizeof(char) * s->cp_sizeof);
         s->cp_data_size--;
     }
 
-    static void* g_storage_get_by_index(ecs_cp_store_t* s, u32 index)
+    static void *g_storage_get_by_index(ecs_cp_store_t *s, u32 index)
     {
         ASSERT(s);
         ASSERT(index < s->cp_data_size);
-        return &((char*)s->cp_data)[index * sizeof(char) * s->cp_sizeof];
+        return &((char *)s->cp_data)[index * sizeof(char) * s->cp_sizeof];
     }
 
-    static void* s_storage_get(ecs_cp_store_t* s, entity_t e)
+    static void *s_storage_get(ecs_cp_store_t *s, entity_t e)
     {
         ASSERT(s);
         ASSERT(e != g_null_entity);
         return g_storage_get_by_index(s, s_sparse_index(&s->mapping, e));
     }
 
-    static void* s_storage_try_get(ecs_cp_store_t* s, entity_t e)
+    static void *s_storage_try_get(ecs_cp_store_t *s, entity_t e)
     {
         ASSERT(s);
         ASSERT(e != g_null_entity);
         return s_sparse_contains(&s->mapping, e) ? s_storage_get(s, e) : 0;
     }
 
-    static bool s_storage_contains(ecs_cp_store_t* s, entity_t e)
+    static bool s_storage_contains(ecs_cp_store_t *s, entity_t e)
     {
         ASSERT(s);
         ASSERT(e != g_null_entity);
@@ -338,51 +416,51 @@ namespace xcore
     // Is the global context that holds each storage for each component types and the entities.
     struct ecs_t
     {
-        ecs_cp_store_t** global_cp_array;      // array to pointers to storage
-        u32              global_cp_array_size; //
+        ecs_cp_store_t **global_cp_array; // array to pointers to storage
+        u32 global_cp_array_size;         //
 
-        ecs_cp_store_t** tagged_cp_array;      //
-        u32              tagged_cp_array_size; //
+        ecs_cp_store_t **tagged_cp_array; //
+        u32 tagged_cp_array_size;         //
 
-        u32         entities_size;
-        entity_t*   entities; // contains all the allocated entities
+        u32 entities_size;
+        entity_t *entities; // contains all the allocated entities
         entity_id_t available_id;
         // hbb_t     entities_unused; // '1' means active, '0' means unused/free
 
-        u32          unique_cp_id;
-        u32          unique_tag_id;
-        u32          num_unique_cps;
-        u32          max_unique_cps;
-        const char** unique_cps; // sorted by pointer
-        u32          num_unique_tags;
-        u32          max_unique_tags;
-        const char** unique_tags; // sorted by pointer
+        u32 unique_cp_id;
+        u32 unique_tag_id;
+        u32 num_unique_cps;
+        u32 max_unique_cps;
+        const char **unique_cps; // sorted by pointer
+        u32 num_unique_tags;
+        u32 max_unique_tags;
+        const char **unique_tags; // sorted by pointer
     };
 
-    static u32 s_ecs_unique_cp_id(ecs_t* r) { return r->unique_cp_id++; }
-    static u32 s_ecs_unique_group_id(ecs_t* r) { return r->unique_tag_id++; }
+    static u32 s_ecs_unique_cp_id(ecs_t *r) { return r->unique_cp_id++; }
+    static u32 s_ecs_unique_group_id(ecs_t *r) { return r->unique_tag_id++; }
 
-    cp_type_t g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cpname)
+    cp_type_t g_register_component_type(ecs_t *r, u32 cp_sizeof, const char *cpname)
     {
         cp_type_t c(0, 0, cpname);
         return c;
     }
 
-    ecs_t* g_ecs_create()
+    ecs_t *g_ecs_create()
     {
-        ecs_t* r = (ecs_t*)malloc(sizeof(ecs_t));
+        ecs_t *r = (ecs_t *)malloc(sizeof(ecs_t));
         if (r)
         {
-            r->global_cp_array      = 0;
+            r->global_cp_array = 0;
             r->global_cp_array_size = 0;
-            r->entities             = (entity_t*)malloc(sizeof(entity_t));
-            r->unique_cp_id         = 0;
-            r->unique_tag_id        = 1;
+            r->entities = (entity_t *)malloc(sizeof(entity_t));
+            r->unique_cp_id = 0;
+            r->unique_tag_id = 1;
         }
         return r;
     }
 
-    void g_ecs_destroy(ecs_t* r)
+    void g_ecs_destroy(ecs_t *r)
     {
         if (r)
         {
@@ -398,23 +476,23 @@ namespace xcore
         free(r);
     }
 
-    bool g_valid(ecs_t* r, entity_t e)
+    bool g_valid(ecs_t *r, entity_t e)
     {
         ASSERT(r);
         const entity_id_t id = g_entity_identifier(e);
         return id.id < r->entities_size && r->entities[id.id] == e;
     }
 
-    static entity_t _s_generate_entity(ecs_t* r)
+    static entity_t _s_generate_entity(ecs_t *r)
     {
         // can't create more identifiers entities
         ASSERT(r->entities_size < ECS_ENTITY_ID_MASK);
 
         // alloc one more element to the entities array
-        r->entities = (entity_t*)realloc(r->entities, (r->entities_size + 1) * sizeof(entity_t));
+        r->entities = (entity_t *)realloc(r->entities, (r->entities_size + 1) * sizeof(entity_t));
 
         // create new entity and add it to the array
-        const entity_t e              = g_make_entity({(u32)r->entities_size}, {0});
+        const entity_t e = g_make_entity({(u32)r->entities_size}, {0});
         r->entities[r->entities_size] = e;
         r->entities_size++;
 
@@ -422,7 +500,7 @@ namespace xcore
     }
 
     /* internal function to recycle a non used entity from the linked list */
-    static entity_t _s_recycle_entity(ecs_t* r)
+    static entity_t _s_recycle_entity(ecs_t *r)
     {
         ASSERT(r->available_id.id != g_null_entity);
         // get the first available entity id
@@ -438,14 +516,14 @@ namespace xcore
         return recycled_e;
     }
 
-    static void _s_release_entity(ecs_t* r, entity_t e, entity_ver_t desired_version)
+    static void _s_release_entity(ecs_t *r, entity_t e, entity_ver_t desired_version)
     {
         const entity_id_t e_id = g_entity_identifier(e);
-        r->entities[e_id.id]   = g_make_entity(r->available_id, desired_version);
-        r->available_id        = e_id;
+        r->entities[e_id.id] = g_make_entity(r->available_id, desired_version);
+        r->available_id = e_id;
     }
 
-    entity_t g_create(ecs_t* r)
+    entity_t g_create(ecs_t *r)
     {
         ASSERT(r);
         if (r->available_id.id == g_null_entity)
@@ -460,28 +538,28 @@ namespace xcore
 
     enum
     {
-        ECS_CP_INDEX_MASK  = 0x0000FFF,
-        ECS_CP_GROUP_MASK  = 0x00FF000,
+        ECS_CP_INDEX_MASK = 0x0000FFF,
+        ECS_CP_GROUP_MASK = 0x00FF000,
         ECS_CP_GROUP_SHIFT = 12,
     };
 
-    static u32 s_get_cp_index(cp_type_t const& cp_type) { return cp_type.cp_id & ECS_CP_INDEX_MASK; }
-    static u32 s_get_cp_group(cp_type_t const& cp_type) { return (cp_type.cp_id & ECS_CP_GROUP_MASK) >> ECS_CP_GROUP_SHIFT; }
+    static u32 s_get_cp_index(cp_type_t const &cp_type) { return cp_type.cp_id & ECS_CP_INDEX_MASK; }
+    static u32 s_get_cp_group(cp_type_t const &cp_type) { return (cp_type.cp_id & ECS_CP_GROUP_MASK) >> ECS_CP_GROUP_SHIFT; }
 
-    static ecs_cp_store_t* s_get_cp_storage(ecs_t* r, cp_type_t const& cp_type)
+    static ecs_cp_store_t *s_get_cp_storage(ecs_t *r, cp_type_t const &cp_type)
     {
         ASSERT(r);
-        u32 const       cp_index   = s_get_cp_index(cp_type);
-        ecs_cp_store_t* cp_storage = r->global_cp_array[cp_index];
+        u32 const cp_index = s_get_cp_index(cp_type);
+        ecs_cp_store_t *cp_storage = r->global_cp_array[cp_index];
         if (cp_storage == nullptr)
         {
-            cp_storage                   = s_storage_new(cp_type.cp_sizeof, cp_type.cp_id);
+            cp_storage = s_storage_new(cp_type.cp_sizeof, cp_type.cp_id);
             r->global_cp_array[cp_index] = cp_storage;
         }
         return cp_storage;
     }
 
-    void g_remove_all(ecs_t* r, entity_t e)
+    void g_remove_all(ecs_t *r, entity_t e)
     {
         ASSERT(r);
         ASSERT(g_valid(r, e));
@@ -495,14 +573,14 @@ namespace xcore
         }
     }
 
-    void g_remove(ecs_t* r, entity_t e, cp_type_t cp_type)
+    void g_remove(ecs_t *r, entity_t e, cp_type_t cp_type)
     {
         ASSERT(false);
         ASSERT(g_valid(r, e));
         s_storage_remove(s_get_cp_storage(r, cp_type), e);
     }
 
-    void g_destroy(ecs_t* r, entity_t e)
+    void g_destroy(ecs_t *r, entity_t e)
     {
         ASSERT(r);
         ASSERT(e != g_null_entity);
@@ -516,7 +594,7 @@ namespace xcore
         _s_release_entity(r, e, new_version);
     }
 
-    bool g_has(ecs_t* r, entity_t e, cp_type_t cp_type)
+    bool g_has(ecs_t *r, entity_t e, cp_type_t cp_type)
     {
         ASSERT(r);
         ASSERT(g_valid(r, e));
@@ -524,7 +602,7 @@ namespace xcore
         return s_storage_contains(s_get_cp_storage(r, cp_type), e);
     }
 
-    void* g_emplace(ecs_t* r, entity_t e, cp_type_t cp_type)
+    void *g_emplace(ecs_t *r, entity_t e, cp_type_t cp_type)
     {
         ASSERT(r);
         ASSERT(g_valid(r, e));
@@ -532,7 +610,7 @@ namespace xcore
         return s_storage_emplace(s_get_cp_storage(r, cp_type), e);
     }
 
-    void* g_get(ecs_t* r, entity_t e, cp_type_t cp_type)
+    void *g_get(ecs_t *r, entity_t e, cp_type_t cp_type)
     {
         ASSERT(r);
         ASSERT(g_valid(r, e));
@@ -540,7 +618,7 @@ namespace xcore
         return s_storage_get(s_get_cp_storage(r, cp_type), e);
     }
 
-    void* g_try_get(ecs_t* r, entity_t e, cp_type_t cp_type)
+    void *g_try_get(ecs_t *r, entity_t e, cp_type_t cp_type)
     {
         ASSERT(r);
         ASSERT(g_valid(r, e));
@@ -548,7 +626,7 @@ namespace xcore
         return s_storage_try_get(s_get_cp_storage(r, cp_type), e);
     }
 
-    void g_each(ecs_t* r, void (*fun)(ecs_t*, entity_t, void*), void* udata)
+    void g_each(ecs_t *r, void (*fun)(ecs_t *, entity_t, void *), void *udata)
     {
         ASSERT(r);
         if (!fun)
@@ -576,7 +654,7 @@ namespace xcore
         }
     }
 
-    bool g_orphan(ecs_t* r, entity_t e)
+    bool g_orphan(ecs_t *r, entity_t e)
     {
         ASSERT(r);
         ASSERT(g_valid(r, e));
@@ -596,20 +674,20 @@ namespace xcore
     /* Internal function to iterate orphans*/
     struct orphans_fun_data_t
     {
-        void* orphans_udata;
-        void (*orphans_fun)(ecs_t*, entity_t, void*);
+        void *orphans_udata;
+        void (*orphans_fun)(ecs_t *, entity_t, void *);
     };
 
-    static void _s_orphans_each_executor(ecs_t* r, entity_t e, void* udata)
+    static void _s_orphans_each_executor(ecs_t *r, entity_t e, void *udata)
     {
-        orphans_fun_data_t* orphans_data = (orphans_fun_data_t*)udata;
+        orphans_fun_data_t *orphans_data = (orphans_fun_data_t *)udata;
         if (g_orphan(r, e))
         {
             orphans_data->orphans_fun(r, e, orphans_data->orphans_udata);
         }
     }
 
-    void g_orphans_each(ecs_t* r, void (*fun)(ecs_t*, entity_t, void*), void* udata)
+    void g_orphans_each(ecs_t *r, void (*fun)(ecs_t *, entity_t, void *), void *udata)
     {
         orphans_fun_data_t ofd = {udata, fun};
         g_each(r, _s_orphans_each_executor, &ofd);
@@ -617,53 +695,53 @@ namespace xcore
 
     // VIEW SINGLE COMPONENT
 
-    ecs_view_single_t g_create_view_single(ecs_t* r, cp_type_t cp_type)
+    ecs_view_single_t g_create_view_single(ecs_t *r, cp_type_t cp_type)
     {
         ASSERT(r);
         ecs_view_single_t v = {0};
-        v.storage           = s_get_cp_storage(r, cp_type);
+        v.storage = s_get_cp_storage(r, cp_type);
         ASSERT(v.storage);
 
-        ecs_cp_store_t* storage = (ecs_cp_store_t*)v.storage;
+        ecs_cp_store_t *storage = (ecs_cp_store_t *)v.storage;
         if (storage->cp_data_size != 0)
         {
             // get the last entity of the storage
             v.current_entity_index = storage->cp_data_size - 1;
-            v.entity               = storage->mapping.dense[v.current_entity_index];
+            v.entity = storage->mapping.dense[v.current_entity_index];
         }
         else
         {
             v.current_entity_index = 0;
-            v.entity               = g_null_entity;
+            v.entity = g_null_entity;
         }
         return v;
     }
 
-    bool g_view_single_valid(ecs_view_single_t* v)
+    bool g_view_single_valid(ecs_view_single_t *v)
     {
         ASSERT(v);
         return (v->entity != g_null_entity);
     }
 
-    entity_t g_view_single_entity(ecs_view_single_t* v)
+    entity_t g_view_single_entity(ecs_view_single_t *v)
     {
         ASSERT(v);
         return v->entity;
     }
 
-    void* g_view_single_get(ecs_view_single_t* v)
+    void *g_view_single_get(ecs_view_single_t *v)
     {
         ASSERT(v);
         return g_storage_get_by_index(v->storage, v->current_entity_index);
     }
 
-    void g_view_single_next(ecs_view_single_t* v)
+    void g_view_single_next(ecs_view_single_t *v)
     {
         ASSERT(v);
         if (v->current_entity_index)
         {
             v->current_entity_index--;
-            v->entity = ((ecs_cp_store_t*)v->storage)->mapping.dense[v->current_entity_index];
+            v->entity = ((ecs_cp_store_t *)v->storage)->mapping.dense[v->current_entity_index];
         }
         else
         {
@@ -673,7 +751,7 @@ namespace xcore
 
     /// VIEW MULTI COMPONENTS
 
-    bool g_view_entity_contained(ecs_view_t* v, entity_t e)
+    bool g_view_entity_contained(ecs_view_t *v, entity_t e)
     {
         ASSERT(v);
         ASSERT(g_view_valid(v));
@@ -688,7 +766,7 @@ namespace xcore
         return true;
     }
 
-    u32 g_view_get_index(ecs_view_t* v, cp_type_t cp_type)
+    u32 g_view_get_index(ecs_view_t *v, cp_type_t cp_type)
     {
         ASSERT(v);
         for (u32 i = 0; i < v->pool_count; i++)
@@ -702,9 +780,9 @@ namespace xcore
         return 0;
     }
 
-    void* g_view_get(ecs_view_t* v, cp_type_t cp_type) { return g_view_get_by_index(v, g_view_get_index(v, cp_type)); }
+    void *g_view_get(ecs_view_t *v, cp_type_t cp_type) { return g_view_get_by_index(v, g_view_get_index(v, cp_type)); }
 
-    void* g_view_get_by_index(ecs_view_t* v, u32 pool_index)
+    void *g_view_get_by_index(ecs_view_t *v, u32 pool_index)
     {
         ASSERT(v);
         ASSERT(pool_index >= 0 && pool_index < ecs_view_t::MAX_VIEW_COMPONENTS);
@@ -712,7 +790,7 @@ namespace xcore
         return s_storage_get(v->all_pools[pool_index], v->current_entity);
     }
 
-    void g_view_next(ecs_view_t* v)
+    void g_view_next(ecs_view_t *v)
     {
         ASSERT(v);
         ASSERT(g_view_valid(v));
@@ -722,7 +800,7 @@ namespace xcore
             if (v->current_entity_index)
             {
                 v->current_entity_index--;
-                v->current_entity = ((ecs_cp_store_t*)v->pool)->mapping.dense[v->current_entity_index];
+                v->current_entity = ((ecs_cp_store_t *)v->pool)->mapping.dense[v->current_entity_index];
             }
             else
             {
@@ -731,7 +809,7 @@ namespace xcore
         } while ((v->current_entity != g_null_entity) && !g_view_entity_contained(v, v->current_entity));
     }
 
-    ecs_view_t g_create_view(ecs_t* r, u32 cp_count, cp_type_t* cp_types)
+    ecs_view_t g_create_view(ecs_t *r, u32 cp_count, cp_type_t *cp_types)
     {
         ASSERT(r);
         ASSERT(cp_count < ecs_view_t::MAX_VIEW_COMPONENTS);
@@ -750,7 +828,7 @@ namespace xcore
             }
             else
             {
-                if (((ecs_cp_store_t*)v.all_pools[i])->cp_data_size < ((ecs_cp_store_t*)v.pool)->cp_data_size)
+                if (((ecs_cp_store_t *)v.all_pools[i])->cp_data_size < ((ecs_cp_store_t *)v.pool)->cp_data_size)
                 {
                     v.pool = v.all_pools[i];
                 }
@@ -758,10 +836,10 @@ namespace xcore
             v.to_pool_index[i] = cp_types[i].cp_id;
         }
 
-        if (v.pool && ((ecs_cp_store_t*)v.pool)->cp_data_size != 0)
+        if (v.pool && ((ecs_cp_store_t *)v.pool)->cp_data_size != 0)
         {
-            v.current_entity_index = ((ecs_cp_store_t*)v.pool)->cp_data_size - 1;
-            v.current_entity       = ((ecs_cp_store_t*)v.pool)->mapping.dense[v.current_entity_index];
+            v.current_entity_index = ((ecs_cp_store_t *)v.pool)->cp_data_size - 1;
+            v.current_entity = ((ecs_cp_store_t *)v.pool)->mapping.dense[v.current_entity_index];
             // now check if this entity is contained in all the pools
             if (!g_view_entity_contained(&v, v.current_entity))
             {
@@ -772,22 +850,22 @@ namespace xcore
         else
         {
             v.current_entity_index = 0;
-            v.current_entity       = g_null_entity;
+            v.current_entity = g_null_entity;
         }
         return v;
     }
 
-    bool g_view_valid(ecs_view_t* v)
+    bool g_view_valid(ecs_view_t *v)
     {
         ASSERT(v);
         return v->current_entity != g_null_entity;
     }
 
-    entity_t g_view_entity(ecs_view_t* v)
+    entity_t g_view_entity(ecs_view_t *v)
     {
         ASSERT(v);
         ASSERT(g_view_valid(v));
-        return ((ecs_cp_store_t*)v->pool)->mapping.dense[v->current_entity_index];
+        return ((ecs_cp_store_t *)v->pool)->mapping.dense[v->current_entity_index];
     }
 
 } // namespace xcore
