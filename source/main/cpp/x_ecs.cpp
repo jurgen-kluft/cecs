@@ -7,10 +7,9 @@ namespace xcore
 {
     struct entity_info_t
     {
-        u32 m_groups; // each bit tells us if we also exist in group1_t/group2_t/.../group16_t/.../group32_t
-
-        u32 m_group; 
-        u32 m_index; // the group/entity index
+        u32 m_index;    // the group/entity index
+        u16 m_groups;   // each bit tells us if we also exist in group1_t/group2_t/.../group16_t/.../group32_t
+        u16 m_cp_count; // number of components
     };
 
     // Each group covers N components
@@ -19,7 +18,11 @@ namespace xcore
     struct group_t
     {
         u32 m_entity_index; // The owner (top byte is hierarchical bits for m_cp_bitset[8])
-        u32 m_cp_bitset[8]; // 256 bits
+        union
+        {
+            u8  m_cp_bitset[32]; // 256 bits
+            u64 m_cp_bitset[4];  // 256 bits
+        };
         u32 m_cp_data_offset[]; // N-size, depends on the actual group
     };
 
