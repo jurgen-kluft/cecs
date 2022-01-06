@@ -21,14 +21,12 @@ namespace xcore
     struct entity_id_t { u32 id; };
     struct entity_gx_t { u32 gx; };
 
-    #define ECS_ENTITY_ID_MASK       ((u32)0x000FFFFF)   // Mask to use to get the entity number out of an identifier (1 M)
-    #define ECS_ENTITY_TYPE_MASK     ((u32)0x0FF00000)   // Mask to use to get the entity group out of an identifier (32)
-    #define ECS_ENTITY_VERSION_MASK  ((u32)0xF0000000)   // Mask to use to get the version out of an identifier
+    #define ECS_ENTITY_ID_MASK       ((u32)0x003FFFFF)   // Mask to use to get the entity number out of an identifier
+    #define ECS_ENTITY_VERSION_MASK  ((u32)0xFFC00000)   // Mask to use to get the version out of an identifier
     #define ECS_ENTITY_SHIFT         ((s8)20)            // Extent of the entity number within an identifier
     entity_ver_t g_entity_version(entity_t e);           // Returns the version part of the entity
     entity_id_t  g_entity_identifier(entity_t e);        // Returns the id part of the entity
-    entity_gx_t  g_entity_group(entity_t e);             // Returns the group part of the entity
-    entity_t     g_touch_entity(entity_id_t id, entity_ver_t version); // Makes a entity_t from entity_id and entity_version
+    entity_t     g_make_entity(entity_id_t id, entity_ver_t version); // Makes a entity_t from entity_id and entity_version
 
     extern const entity_t g_null_entity;
 
@@ -41,31 +39,23 @@ namespace xcore
     // Component Type identifier information.
     struct cp_type_t
     {
-        inline cp_type_t(u32 id, u32 sizeofcp, const char* name, const char* tag)
+        inline cp_type_t(u32 id, u32 sizeofcp, const char* name)
             : cp_id(id)
             , cp_sizeof(sizeofcp)
             , cp_name(name)
-            , cp_tag(tag)
         {
         }
         u32 const         cp_id;
         u32 const         cp_sizeof;
         const char* const cp_name;
-        const char* const cp_tag;
     };
 
     // Registers a component type and returns its type information
-    cp_type_t g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cpname, const char* cptag = "global");
+    cp_type_t g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cpname);
 
     template <typename T> inline const char* nameof() { return "?"; }
 
-    struct ecs_cp_tag_global_t
-    {
-    };
-
-    template <> inline const char* nameof<ecs_cp_tag_global_t>() { return "global"; }
-
-    template <typename T, typename Tag = ecs_cp_tag_global_t> cp_type_t g_register_component_type(ecs_t* r) { return g_register_component_type(r, sizeof(T), nameof<T>(), nameof<Tag>()); }
+    template <typename T> cp_type_t g_register_component_type(ecs_t* r) { return g_register_component_type(r, sizeof(T), nameof<T>()); }
 
     // Creates a new entity and returns it
     // The identifier can be:

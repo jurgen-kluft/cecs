@@ -5,6 +5,80 @@
 
 namespace xcore
 {
+    // ecs, max 256 components
+    // ecs, max 16 M entities
+    // entity, max 256 components
+
+    struct entity_info_t
+    {
+        u32 m_groups; // each bit tells us if we also exist in group1_t/group2_t/.../group16_t/.../group32_t
+        u32 m_index;  // the group/entity index
+    };
+
+    // Each group covers 8 components, so for 256 components we will need 32 groups.
+    // 32 bytes covering potentially 8 components
+    struct group_t
+    {
+        u32 m_index;         // For remove/swap, this indexes into the previous group
+        u8  m_cp_bits;       // Which of the 8 cp_data[] are used
+        u8  m_cp_group;      // Index of this group
+        u8  m_cp_group_next; // Index of next group
+        u8  m_dummy;
+        u16 m_cp_data_l[8]; // The lower 2 bytes of each offset
+        u8  m_cp_data_h[8]; // The high bytes of each offset in cp_data (max 16 M entries)
+    };
+
+    // when a component is removed we can easily swap it with the last one
+    // and update the information in the specific group_t.
+    struct component_store_t
+    {
+        void* component_data;
+        u32*  entity_ids; // each one is a group-index/entity-index
+        u32   size;
+        u32   cap;
+    };
+
+    static void remove_from_component_store(u32 index, u32& update_index, u32& update_offset) {}
+
+    struct ecs2_t
+    {
+        component_store_t component_stores[256];
+        u32               entity_group_size[32];
+        u32               entity_group_cap[32];
+        group_t*          entity_groups[32];
+        u32               entity_array_size;
+        u32               entity_array_cap;
+        entity_info_t*    entity_array;
+    };
+
+    static bool entity_has_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp)
+    {
+        entity_info_t* ei  = &ecs->entity_array[e];
+        s32 const      ggi = cp.cp_id >> 3;
+        if ((ei->m_groups & (1 << ggi)) != 0)
+        {
+            u8       gi      = (ei->m_index >> 24) & 0xFF;
+            u32      entityi = (ei->m_index & 0xFFFFFF);
+            group_t* group   = ecs->entity_groups[gi];
+            while (ggi != gi)
+            {
+                group   = &group[entityi];
+                gi      = group->m_cp_group_next;
+                entityi = group->m_index;
+                group   = ecs->entity_group[gi];
+            }
+            u8 const cp_bits = (group->m_cp_bits & (1 << (cp.cp_id & 0x7)));
+            if (cp_bits != 0)
+            {
+                // s8 const cpi = xfindFirstBit(cp_bits);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static bool entity_remove_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp) {}
+
     // The primary goals of this ecs:
     //   1) iterators are easy and fast
     //   2) creating an entity is fast
@@ -24,37 +98,56 @@ namespace xcore
     //   - Entity::HasAnyComponent()
     //   - Entity::HasComponent(cp_type_t)
     //   - Entity::RemoveComponent(entity_t, cp_type_t)
-    // 
+    //
 
     // Entity Systems
     // --------------
     //
     // Furthermore, how would we be able to collect entities that get a component X attached.
-    // For example, if a 'system' wants to keep track of entities that have certain components 
+    // For example, if a 'system' wants to keep track of entities that have certain components
     // they would need to be able to receive specific events.
-    // 
+    //
 
     // Entities+Components Iterators
     // -----------------------------
-    // 
+    //
     // 1. Iterators are easy and fast:
-    //    
+    //
     //    Iterating over entities that have one or more the same components:
-    //    e.g. 
+    //    e.g.
     //            ecs::iterator it = begin<position_t, velocity_t, scale_t>();
     //            ecs::iterator it = begin<position_t, velocity_t, scale_t>(ecs_not<threat_t>(ecs));
     //            while (it.valid())
-    //            { 
-    //                entity_t ent = *it; 
-    //                position_t* pos = it.get_cp<position_t>(); 
+    //            {
+    //                entity_t ent = *it;
+    //                position_t* pos = it.get_cp<position_t>();
     //                velocity_t* vel = it.get_cp<velocity_t>();
     //                ++it;
     //            }
-    // 
-    // If entities and their are always in-order in their storage, the iterator would only have to 
+    //
+    struct iterator_t
+    {
+        entity_t* cp_entity[32];
+        void*     cp_data[32];
+        u32       cp_sizes[32];
+        u32       cp_count;
+        entity_t  current;
+
+        void begin() {}
+
+        void next() {}
+    };
+
+    // If entities and their data are always in-order in their storage, the iterator would only have to
     // increment pointers on each [entity_id,component] array and keeping the entity_id in sync.
     // Also the component data is visited in-order.
-    // 
+    //
+    // Also we want something in place which give us the smallest (id) when requesting a free entity id.
+    // This means that we need to be able to quickly identify the smallest id that is free.
+    // Currently thinking about a hierarchical bitset and at level 0 a byte that indexes into part of the
+    // full entity_t array (256 entries).
+    // For 4 million entity ids, we would need 32 Kb for the bytes and (512 u64 / 4 Kb) + (8 u64 / 64 b) + u8
+    //
 
     const entity_t g_null_entity = (entity_t)ECS_ENTITY_ID_MASK;
 
@@ -295,9 +388,9 @@ namespace xcore
     static u32 s_ecs_unique_cp_id(ecs_t* r) { return r->unique_cp_id++; }
     static u32 s_ecs_unique_group_id(ecs_t* r) { return r->unique_tag_id++; }
 
-    cp_type_t g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cpname, const char* cpgroup)
+    cp_type_t g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cpname)
     {
-        cp_type_t c(0, 0, cpname, cpgroup);
+        cp_type_t c(0, 0, cpname);
         return c;
     }
 
@@ -393,13 +486,13 @@ namespace xcore
 
     enum
     {
-        ECS_CP_INDEX_MASK = 0x0000FFF,
-        ECS_CP_GROUP_MASK = 0x00FF000,
+        ECS_CP_INDEX_MASK  = 0x0000FFF,
+        ECS_CP_GROUP_MASK  = 0x00FF000,
         ECS_CP_GROUP_SHIFT = 12,
     };
 
     static u32 s_get_cp_index(cp_type_t const& cp_type) { return cp_type.cp_id & ECS_CP_INDEX_MASK; }
-    static u32 s_get_cp_group(cp_type_t const& cp_type) { return (cp_type.cp_id & ECS_CP_GROUP_MASK)>>ECS_CP_GROUP_SHIFT; }
+    static u32 s_get_cp_group(cp_type_t const& cp_type) { return (cp_type.cp_id & ECS_CP_GROUP_MASK) >> ECS_CP_GROUP_SHIFT; }
 
     static ecs_cp_store_t* s_get_cp_storage(ecs_t* r, cp_type_t const& cp_type)
     {

@@ -9,11 +9,6 @@ namespace xcore
     // You can make components that are just system types, in this case just a byte
     template <> inline const char* nameof<u8>() { return "u8"; }
 
-    struct physics_cp_tag_t
-    {
-    };
-    template <> inline const char* nameof<physics_cp_tag_t>() { return "physics"; }
-
     struct position_t
     {
         f32 x, y, z;
@@ -51,7 +46,6 @@ UNITTEST_SUITE_BEGIN(ecs)
             cp_type_t bytecmp          = g_register_component_type<u8>(ecs);
             cp_type_t poscmp           = g_register_component_type<position_t>(ecs);
             cp_type_t velcmp           = g_register_component_type<velocity_t>(ecs);
-            cp_type_t physics_statecmp = g_register_component_type<physics_state_t, physics_cp_tag_t>(ecs);
         }
     }
 }
