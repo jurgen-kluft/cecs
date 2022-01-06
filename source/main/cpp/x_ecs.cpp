@@ -5,27 +5,22 @@
 
 namespace xcore
 {
-    // ecs, max 256 components
-    // ecs, max 16 M entities
-    // entity, max 256 components
-
     struct entity_info_t
     {
         u32 m_groups; // each bit tells us if we also exist in group1_t/group2_t/.../group16_t/.../group32_t
-        u32 m_index;  // the group/entity index
+
+        u32 m_group; 
+        u32 m_index; // the group/entity index
     };
 
-    // Each group covers 8 components, so for 256 components we will need 32 groups.
-    // 32 bytes covering potentially 8 components
+    // Each group covers N components
+    // The ecs has 32 different groups where each group limits the number of components are held
+    // 0:8/1:16/2:24/3:32/4:40 etc..
     struct group_t
     {
-        u32 m_index;         // For remove/swap, this indexes into the previous group
-        u8  m_cp_bits;       // Which of the 8 cp_data[] are used
-        u8  m_cp_group;      // Index of this group
-        u8  m_cp_group_next; // Index of next group
-        u8  m_dummy;
-        u16 m_cp_data_l[8]; // The lower 2 bytes of each offset
-        u8  m_cp_data_h[8]; // The high bytes of each offset in cp_data (max 16 M entries)
+        u32 m_entity_index; // The owner (top byte is hierarchical bits for m_cp_bitset[8])
+        u32 m_cp_bitset[8]; // 256 bits
+        u32 m_cp_data_offset[]; // N-size, depends on the actual group
     };
 
     // when a component is removed we can easily swap it with the last one
@@ -51,33 +46,9 @@ namespace xcore
         entity_info_t*    entity_array;
     };
 
-    static bool entity_has_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp)
-    {
-        entity_info_t* ei  = &ecs->entity_array[e];
-        s32 const      ggi = cp.cp_id >> 3;
-        if ((ei->m_groups & (1 << ggi)) != 0)
-        {
-            u8       gi      = (ei->m_index >> 24) & 0xFF;
-            u32      entityi = (ei->m_index & 0xFFFFFF);
-            group_t* group   = ecs->entity_groups[gi];
-            while (ggi != gi)
-            {
-                group   = &group[entityi];
-                gi      = group->m_cp_group_next;
-                entityi = group->m_index;
-                group   = ecs->entity_group[gi];
-            }
-            u8 const cp_bits = (group->m_cp_bits & (1 << (cp.cp_id & 0x7)));
-            if (cp_bits != 0)
-            {
-                // s8 const cpi = xfindFirstBit(cp_bits);
-                return true;
-            }
-        }
-        return false;
-    }
+    static bool entity_has_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp) { return false; }
 
-    static bool entity_remove_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp) {}
+    static bool entity_remove_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp) { return false; }
 
     // The primary goals of this ecs:
     //   1) iterators are easy and fast
