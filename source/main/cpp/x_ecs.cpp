@@ -5,53 +5,140 @@
 
 namespace xcore
 {
-    // 8 bytes
-    struct cp_store_t
+    struct cp_store_t;
+    struct entity0_t;
+
+    // this system is limited to a max of 1024 components
+    // you can keep your ecs efficient by carefully organizing your components in groups of 32
+    // component data array's are packed
+    // en_inf1_t and en_inf2_t array's are packed
+    struct ecs2_t
     {
-        void* cp_data;
-        u32*  entity_ids;
-        u32   size;
-        u32   cap;
+        alloc_t* m_allocator;
+
+        u64*        m_a_cp_store_bitset; // To identify which component stores are still free (to give out new component id)
+        cp_type_t*  m_a_cp_store_type;   // The type of each store
+        cp_store_t* m_a_cp_store;        // N max number of components
+
+        // Max 8 million entities
+        u8*  m_free_entities_level0;     // 32768 * 256 = 8 M (each byte is an index into a range of 256 entities)
+        u32* m_free_entities_level1;     // 1024 * 32 = 32768 bits
+        u32  m_free_entities_level2[32]; // 1024 bits
+        u32  m_free_entities_level3;     // 8 bits
+
+        entity0_t* m_a_entities;
+        u8**       m_a_a_en_inf1;
+        u8**       m_a_a_en_inf2;
     };
 
-    static inline void set_u24x8(u8* high, s8 i, u32 v)
+    static inline void s_set_u24(u8* base_ptr, u32 i, u32 v)
     {
-        u16* low = high + 8;
-        low[i]   = (u16)v;
-        high[i]  = (u8)(v >> 16);
+        base_ptr += (i << 1) + i;
+        base_ptr[0] = (u8)(v << 16);
+        base_ptr[1] = (u8)(v << 8);
+        base_ptr[2] = (u8)(v << 0);
+        return v;
     }
 
-    static inline u32 get_u24x8(u8* high, s8 i)
+    static inline u32 s_get_u24(u8 const* base_ptr, u32 i)
     {
-        u16* low = high + 8;
-        return low[i] | (high[i] << 16);
+        base_ptr += (i << 1) + i;
+        u32 const v = (base_ptr[0] << 16) | (base_ptr[1] << 8) | (base_ptr[2] << 0);
+        return v;
     }
 
-    struct en_inf_idx_t
-    {
-        inline bool get_flag() const { return m_en0_index & 0x80 != 0; }
-        inline void set_flag() { m_en0_index = m_en0_index | 0x80; }
-        inline void clr_flag() { m_en0_index = m_en0_index & 0x7F; }
+    static const u32 s_cp_store_capacities[]{8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 65536 * 2, 65536 * 4, 65536 * 8, 65536 * 16, 65536 * 32};
 
-        inline u8   get_index() const { return m_en0_index & 0x7F; }
-        inline u32  get_offset() const { return (m_en0_offset_l) | (m_en0_offset_h << 16); }
-        inline void set_index(u8 index) { return m_en0_index = (m_en0_index & 0x80) | (index & 0x7F); }
+    struct cp_store_t
+    {
+        u8* m_cp_data;
+        u8* m_entity_ids;
+        u32 m_capacity_index;
+        u32 m_size;
+    };
+
+    static void s_cp_store_init(ecs2_t* ecs, cp_store_t*& cp_store, cp_type_t const& cp_type)
+    {
+        cp_store                   = (cp_store_t*)ecs->m_allocator->allocate(sizeof(cp_store_t));
+        cp_store->m_capacity_index = 0;
+        cp_store->m_size           = 0;
+        cp_store->m_cap_size       = (s_cp_store_capacities[0] << 24);
+        cp_store->m_cp_data        = (u8*)ecs->m_allocator->allocate(s_cp_store_capacities[0] * cp_type.cp_sizeof);
+        cp_store->m_entity_ids     = (u8*)ecs->m_allocator->allocate(s_cp_store_capacities[0] * 3);
+    }
+
+    static void s_cp_store_grow(ecs2_t* ecs, cp_store_t* cp_store, cp_type_t const& cp_type)
+    {
+        cp_store->m_capacity_index += 1;
+        cp_store->m_cp_data    = reallocate(cp_store->m_cp_data, cp_store->m_size * cp_type.cp_sizeof, s_cp_store_capacities[cp_store->m_capacity_index] * cp_type.cp_sizeof);
+        cp_store->m_entity_ids = reallocate(cp_store->m_entity_ids, cp_store->m_size * 3, s_cp_store_capacities[cp_store->m_capacity_index] * 3);
+    }
+
+    static inline u8* s_cp_store_get_cp((cp_store_t* cp_store, cp_type_t const& cp_type, u32 cp_index)
+    {
+        u8 const* cp_data = cp_store->m_cp_data + (cp_type.cp_sizeof * cp_index);
+        return cp_data;
+    }
+
+    static void s_cp_store_dealloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 cp_index, u32& changed_entity_id, u32& new_cp_index)
+    {
+        // user should check if the entity that is processed is unequal to the 'changed entity id' to
+        // see if it needs to update component index.
+        u32 const last_cp_index = cp_store->m_size - 1;
+        changed_entity_id       = cp_store->m_entity_ids[last_cp_index];
+        if (cp_index != last_cp_index)
+        {
+            // swap remove
+            cp_store->m_entity_ids[cp_index] = changed_entity_id;
+
+            // copy component data (slow version)
+            // TODO: speed up (align size and struct to u32?)
+            u8 const* src_data = s_cp_store_get_cp(cp_store, cp_type, cp_index);
+            u8*       dst_data = s_cp_store_get_cp(cp_store, cp_type, last_cp_index);
+            s32       n        = 0;
+            while (n < cp_type.cp_sizeof)
+                *dst_data++ = +src_data++;
+        }
+        new_cp_index = cp_index;
+        cp_store->m_size -= 1;
+    }
+
+    static u32 cp_store_alloc_cp(ecs2_t* ecs, cp_store_t* cp_store, cp_type_t const& cp_type)
+    {
+        // return index of newly allocated component
+        if (cp_store->m_size == s_cp_store_capacities[cp_store->m_capacity_index])
+        {
+            cp_store_grow(ecs, cp_store, cp_type);
+        }
+        u32 const new_index = cp_store->m_size++;
+        return new_index;
+    }
+
+    struct index_offset_t
+    {
+        inline bool get_flag() const { return m_index & 0x80 != 0; }
+        inline void set_flag() { m_index = m_index | 0x80; }
+        inline void clr_flag() { m_index = m_index & 0x7F; }
+
+        inline u8   get_index() const { return m_index & 0x7F; }
+        inline u32  get_offset() const { return (m_offset_l) | (m_offset_h << 16); }
+        inline void set_index(u8 index) { return m_index = (m_index & 0x80) | (index & 0x7F); }
         inline void set_offset(u32 offset)
         {
-            m_en0_offset_h = (u8)(offset >> 16);
-            m_en0_offset_l = (u16)(offset);
+            m_offset_h = (u8)(offset >> 16);
+            m_offset_l = (u16)(offset);
         }
 
-        u8  m_en0_index;
-        u8  m_en0_offset_h;
-        u16 m_en0_offset_l;
+        u8  m_index;
+        u8  m_offset_h;
+        u16 m_offset_l;
     };
 
     // main entity
     struct en_inf_t
     {
-        en_inf_idx_t m_en_inf;         // the en_inf1 or en_inf2 array index / offset
-        u32          m_cp_inf2_bitset; // Each bit represents 32 components
+        index_offset_t m_en_inf;         // the en_inf1 or en_inf2 array index / offset
+        u32            m_cp_inf2_bitset; // Each bit represents 32 components
     };
 
     // an entity with 30 components in one group would take = 8 + (8 + ((32/4) * 12)) = 112 bytes,
@@ -63,17 +150,17 @@ namespace xcore
     // en_inf1_t can have the following sizes: 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68
     struct en_inf1_t
     {
-        u32          m_en0_index;   // the owner of this structure
-        en_inf_idx_t m_a_en_inf2[]; // indices into en_inf2_t[]
-    };
+        u32            m_en0_index;   // the owner of this structure
+        index_offset_t m_a_en_inf2[]; // indices into en_inf2_t[]
+    }
 
     // Can hold 32 components
     // en_inf2_t can have the following sizes: 24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192, 204
     struct en_inf2_t
     {
-        u32          m_cp_bitset;        // max 32 components
-        en_inf_idx_t m_cp_inf1_index;    // The en_inf1 or en0_inf owner of this struct
-        u32          m_cp_data_offset[]; // N-size, depends on the the number of bits set in m_cp_bitset aligned to a multiple of 4
+        u32            m_cp_bitset;        // max 32 components
+        index_offset_t m_cp_inf1_index;    // The en_inf1 or en0_inf owner of this struct
+        u8             m_cp_data_offset[]; // N-size, depends on the the number of bits set in m_cp_bitset aligned to a multiple of 4
     };
 
     template <typename T, s32 SIZE> class array_t
@@ -86,47 +173,13 @@ namespace xcore
         T*  m_array;
     };
 
-    // this system is limited to a max of 1024 components
-    // you can keep your ecs efficient by carefully organizing your components in groups of 32
-    // component data array's are packed
-    // en_inf1_t and en_inf2_t array's are packed
-    struct ecs2_t
-    {
-        u64*        cp_stores_bitset; // To identify which component stores are still free (to give out new component id)
-        cp_store_t* cp_stores;        // N max number of components
-
-        // Max 8 million entities
-        u8*  m_free_entities_level0;     // 32768 * 256 = 8 M (each byte is an index into a range of 256 entities)
-        u32* m_free_entities_level1;     // 1024 * 32 = 32768 bits
-        u32  m_free_entities_level2[32]; // 1024 bits
-        u32  m_free_entities_level3;     // 8 bits
-
-        en0_inf_t* m_entities;
-        u8**       m_en_inf1_a;
-        u8**       m_a_a_p_en_inf2;
-    };
-
-    static void cp_store_dealloc_cp(cp_store_t* cp_store, u32 index, u32& update_index, u32& update_offset)
-    {
-        // remove a component from this store and return some information of which entity
-        // needs an update regarding this store. The reason being that we have swapped
-        // the last entry into the removed entry.
-        // what if we removed the last entry?
-    }
-
-    static u32 cp_store_alloc_cp(cp_store_t* cp_store)
-    {
-        // return index of newly allocated component
-        return 0;
-    }
-
-    static inline u32 s_compute_inf1_element_size(u8 inf1_ai)
+    static inline u32 s_compute_inf1_struct_size(u8 inf1_ai)
     {
         // en_inf1_t can have the following sizes: 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68
         return 8 + inf1_ai * 4;
     }
 
-    static inline u32 s_compute_inf2_element_size(u8 inf2_ai)
+    static inline u32 s_compute_inf2_struct_size(u8 inf2_ai)
     {
         // en_inf2_t can have the following sizes: 24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192, 204
         return (inf1_ai + 2) * 12;
@@ -149,10 +202,10 @@ namespace xcore
             {
                 // We have a direct link with en_inf2
                 u8 const         en_inf2_ai = ei->m_en_inf.get_index();
-                u32 const        en_inf2_es = s_compute_inf2_element_size(en_inf2_ai);
+                u32 const        en_inf2_es = s_compute_inf2_struct_size(en_inf2_ai);
                 en_inf2_t const* en_inf2    = (en_inf1_t const*)(ecs->m_a_a_p_en_inf2[en_inf2_ai] + ((ei->m_en_inf.get_offset()) * en_inf2_es));
 
-                return ((en_inf2->m_cp_bitset & (cp.cp_id & 0x1F)) != 0);
+                return ((en_inf2->m_cp_bitset & (1 << (cp.cp_id & 0x1F))) != 0);
             }
             else
             {
@@ -160,15 +213,15 @@ namespace xcore
                 u8 const en_inf1_ai = ei->m_en_inf.get_index();
 
                 // each en_inf1 array has a different size for the en_inf1 structure
-                u32 const        en_inf1_es = s_compute_inf1_element_size(en_inf1_ai);
+                u32 const        en_inf1_es = s_compute_inf1_struct_size(en_inf1_ai);
                 en_inf1_t const* en_inf1    = (en_inf1_t const*)(ecs->m_en_inf1_a[en_inf1_ai] + ((ei->m_en_inf.get_offset()) * en_inf1_es));
 
                 // Actually we need to know the index
-                s8 const           en_inf2_i   = s_compute_index(ei->m_cpi_bitset, cpri);
-                en_inf_idx_t const en_inf2_inf = en_inf1->m_a_en_inf2[en_inf2_i];
+                s8 const             en_inf2_i   = s_compute_index(ei->m_cpi_bitset, cpri);
+                index_offset_t const en_inf2_inf = en_inf1->m_a_en_inf2[en_inf2_i];
 
                 u8 const         en_inf2_ai = en_inf2_inf.get_index();
-                u32 const        en_inf2_es = s_compute_inf2_element_size(en_inf2_ai);
+                u32 const        en_inf2_es = s_compute_inf2_struct_size(en_inf2_ai);
                 en_inf2_t const* en_inf2    = (en_inf1_t const*)(ecs->m_a_a_p_en_inf2[en_inf2_ai] + ((en_inf2_inf.get_offset()) * en_inf2_es));
 
                 return ((en_inf2->m_cp_bitset & (1 << (cp.cp_id & 0x1F))) != 0);
@@ -187,30 +240,61 @@ namespace xcore
 
     static void* entity_get_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp)
     {
-        en_inf_t* ei   = ecs->m_a_entity[g_entity_id(e)];
-        u8 const  cpri = cp.cp_id / 8;
+        en_inf_t* ei   = &ecs->m_a_entity[g_entity_id(e)];
+        u8 const  cpri = cp.cp_id / 32;
         if ((ei->m_cpi_bitset & (1 << cpri)) != 0)
         {
             // We do have a component in that range
-            u8 const        cpi_array_index = ei->m_cpi_index >> 24;
-            cp_inf_t const* cp_inf          = ecs->entity_cpi_arrays[cpi_array_index] + (ei->m_cpi_index & 0x00FFFFFF);
-            u8 const        cpib            = 1 << (cp.cp_id & 0x7);
-            if ((cp_inf->m_cp_bitset8[cpri] & cpib) != 0)
+            if (ei->m_en_inf.get_flag())
             {
-                // Now we need to compute the index into the m_cp_data_offset array, this means we need to
-                // count the number of bits set before [cpri]:cpib.
-                u32 const cp_data_index = s_get_cp_index(cp_inf, ei->m_cpi_bitset, cp.cp_id);
-                return cp_inf->m_cp_data_offset[cp_data_index];
+                // We have a direct link with en_inf2
+                u8 const         en_inf2_ai = ei->m_en_inf.get_index();
+                u32 const        en_inf2_es = s_compute_inf2_struct_size(en_inf2_ai);
+                en_inf2_t const* en_inf2    = (en_inf1_t const*)(ecs->m_a_a_p_en_inf2[en_inf2_ai] + ((ei->m_en_inf.get_offset()) * en_inf2_es));
+
+                if ((en_inf2->m_cp_bitset & (1 << (cp.cp_id & 0x1F))) != 0)
+                {
+                    s8 const    cp_i     = s_compute_index(en_inf2->m_cp_bitset, cp.cp_id & 0x1F);
+                    u32 const   cp_inf   = s_get_u24(en_inf2->m_cp_data_offset, cp_i);
+                    cp_store_t* cp_store = ecs->m_cp_stores[cp.cp_id];
+                    return (void*)(cp_store->m_cp_data + (cp_inf * cp.cp_sizeof));
+                }
+            }
+            else
+            {
+                // We have components that cover multiple '32' ranges, so we need to use an indirection (en_inf1)
+                u8 const en_inf1_ai = ei->m_en_inf.get_index();
+
+                // each en_inf1 array has a different size for the en_inf1 structure
+                u32 const        en_inf1_es = s_compute_inf1_struct_size(en_inf1_ai);
+                en_inf1_t const* en_inf1    = (en_inf1_t const*)(ecs->m_en_inf1_a[en_inf1_ai] + ((ei->m_en_inf.get_offset()) * en_inf1_es));
+
+                // Actually we need to know the index
+                s8 const             en_inf2_i   = s_compute_index(ei->m_cpi_bitset, cpri);
+                index_offset_t const en_inf2_inf = en_inf1->m_a_en_inf2[en_inf2_i];
+
+                u8 const         en_inf2_ai = en_inf2_inf.get_index();
+                u32 const        en_inf2_es = s_compute_inf2_struct_size(en_inf2_ai);
+                en_inf2_t const* en_inf2    = (en_inf1_t const*)(ecs->m_a_a_p_en_inf2[en_inf2_ai] + ((en_inf2_inf.get_offset()) * en_inf2_es));
+
+                if ((en_inf2->m_cp_bitset & (1 << (cp.cp_id & 0x1F))) != 0)
+                {
+                    s8 const    cp_i     = s_compute_index(en_inf2->m_cp_bitset, cp.cp_id & 0x1F);
+                    u32 const   cp_inf   = s_get_u24(en_inf2->m_cp_data_offset, cp_i);
+                    cp_store_t* cp_store = ecs->m_cp_stores[cp.cp_id];
+                    return (void*)(cp_store->m_cp_data + (cp_inf * cp.cp_sizeof));
+                }
             }
         }
         return nullptr;
     }
 
-    static bool entity_remove_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp) { return false; }
+    static bool entity_remove_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp) {
+        return false; }
 
     // The primary goals of this ecs:
     //   1) iterators are easy and fast
-    //   2) creating an entity is fast
+    //   2) creating an enecs2_t* ecs, tity is fa
     //   3) adding components is fast
     //   4) removal of a component is fast, but a negative impact on iteration (can be fixed by consolidation call)
     //   5) destroying an entity is fast
@@ -235,9 +319,8 @@ namespace xcore
     // Furthermore, how would we be able to collect entities that get a component X attached.
     // For example, if a 'system' wants to keep track of entities that have certain components
     // they would need to be able to receive specific events.
-    //
 
-    // Entities+Components Iterators
+    //
     // -----------------------------
     //
     // 1. Iterators are easy and fast:
@@ -280,12 +363,17 @@ namespace xcore
 
     const entity_t g_null_entity = (entity_t)ECS_ENTITY_ID_MASK;
 
-    entity_ver_t g_entity_version(entity_t e) { return {e >> ECS_ENTITY_SHIFT}; }
-    entity_id_t  g_entity_identifier(entity_t e) { return {e & ECS_ENTITY_ID_MASK}; }
-    entity_t     g_make_entity(entity_id_t id, entity_ver_t version) { return id.id | (version.ver << ECS_ENTITY_SHIFT); }
+    entity_ver_t g_entity_version(entity_t e) {
+        return {e >> ECS_ENTITY_SHIFT}; }
+    entity_id_t  g_entity_identifier(entity_t e) {
+        return {e & ECS_ENTITY_ID_MASK}; }
+    entity_t     g_make_entity(entity_id_t id, entity_ver_t version) {
+        return id.id | (version.ver << ECS_ENTITY_SHIFT); }
 
-    void* malloc(xsize_t size) { return nullptr; }
-    void* realloc(void* ptr, xsize_t new_size) { return nullptr; }
+    void* malloc(xsize_t size) {
+        return nullptr; }
+    void* realloc(void* ptr, xsize_t new_size) {
+        return nullptr; }
     void  free(void* ptr) {}
 
     void memset(void* ptr, u32 c, u32 length) {}
@@ -514,8 +602,10 @@ namespace xcore
         const char** unique_tags; // sorted by pointer
     };
 
-    static u32 s_ecs_unique_cp_id(ecs_t* r) { return r->unique_cp_id++; }
-    static u32 s_ecs_unique_group_id(ecs_t* r) { return r->unique_tag_id++; }
+    static u32 s_ecs_unique_cp_id(ecs_t* r) {
+        return r->unique_cp_id++; }
+    static u32 s_ecs_unique_group_id(ecs_t* r) {
+        return r->unique_tag_id++; }
 
     cp_type_t g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cpname)
     {
@@ -620,8 +710,10 @@ namespace xcore
         ECS_CP_GROUP_SHIFT = 12,
     };
 
-    static u32 s_get_cp_index(cp_type_t const& cp_type) { return cp_type.cp_id & ECS_CP_INDEX_MASK; }
-    static u32 s_get_cp_group(cp_type_t const& cp_type) { return (cp_type.cp_id & ECS_CP_GROUP_MASK) >> ECS_CP_GROUP_SHIFT; }
+    static u32 s_get_cp_index(cp_type_t const& cp_type) {
+        return cp_type.cp_id & ECS_CP_INDEX_MASK; }
+    static u32 s_get_cp_group(cp_type_t const& cp_type) {
+        return (cp_type.cp_id & ECS_CP_GROUP_MASK) >> ECS_CP_GROUP_SHIFT; }
 
     static ecs_cp_store_t* s_get_cp_storage(ecs_t* r, cp_type_t const& cp_type)
     {
@@ -857,7 +949,8 @@ namespace xcore
         return 0;
     }
 
-    void* g_view_get(ecs_view_t* v, cp_type_t cp_type) { return g_view_get_by_index(v, g_view_get_index(v, cp_type)); }
+    void* g_view_get(ecs_view_t* v, cp_type_t cp_type) {
+        return g_view_get_by_index(v, g_view_get_index(v, cp_type)); }
 
     void* g_view_get_by_index(ecs_view_t* v, u32 pool_index)
     {
