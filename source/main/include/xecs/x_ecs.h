@@ -40,11 +40,18 @@ namespace xcore
     struct ecs2_t;
     extern ecs2_t* g_ecs_create(alloc_t* allocator);
 
-    // Registers a component type and returns its type information
-    cp_type_t const* g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name);
-    template <typename T> inline const char* nameof() { return "?"; }
-    template <typename T> cp_type_t const* g_register_component_type(ecs2_t* r) { return g_register_component_type(r, sizeof(T), nameof<T>()); }
+    // Entity functions
+    extern entity_t g_create_entity(ecs2_t* ecs);
+    extern void     g_delete_entity(ecs2_t* ecs, entity_t entity);
 
+    // Component functions
+
+    extern void g_register_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
+
+    // Registers a component type and returns its type information
+    cp_type_t const*                         g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name);
+    template <typename T> inline const char* nameof() { return "?"; }
+    template <typename T> cp_type_t const*   g_register_component_type(ecs2_t* r) { return g_register_component_type(r, sizeof(T), nameof<T>()); }
 
 } // namespace xcore
 

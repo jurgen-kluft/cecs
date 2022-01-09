@@ -31,10 +31,15 @@ namespace xcore
         return ecs;
     }
 
-    cp_type_t const* g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name)
+    entity_t g_create_entity(ecs2_t* ecs) { return s_create_entity(&ecs->m_entity0_store, ecs->m_allocator); }
+    void g_delete_entity(ecs2_t* ecs, entity_t entity) { s_delete_entity(&ecs->m_entity0_store, entity, ecs->m_allocator); }
+
+    void g_register_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type)
     {
-        return s_cp_register_cp_type(&r->m_component_store, cp_sizeof, cp_name);
+        
     }
+
+    cp_type_t const* g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name) { return s_cp_register_cp_type(&r->m_component_store, cp_sizeof, cp_name); }
 
     // --------------------------------------------------------------------------------------------------------
     // entity functionality
@@ -72,7 +77,7 @@ namespace xcore
                 // The group with 4 bits is always 0, group with 5 bits indicates how many bits where set in m_cp2_bitset below index 'shard_idx'.
                 s8 const  shifts[] = {0, 0, 6, 13, 20};
                 u16 const masks[]  = {0x000, 0x03F, 0x07F, 0x07F, 0xFF};
-                u32 const adders[] = {0, (1<<0), (1<<0) | (1<<6), (1<<0) | (1<<6) | (1<<13), (1<<0) | (1<<6) | (1<<13) | (1<<20), (1<<0) | (1<<6) | (1<<13) | (1<<20) };
+                u32 const adders[] = {0, (1 << 0), (1 << 0) | (1 << 6), (1 << 0) | (1 << 6) | (1 << 13), (1 << 0) | (1 << 6) | (1 << 13) | (1 << 20), (1 << 0) | (1 << 6) | (1 << 13) | (1 << 20)};
                 u32 const cp_a_i   = ((ei->m_cp2_bitcnt >> shifts[shard_idx]) & masks[shard_idx]) + s_compute_index(ei->m_cp2_bitset[shard_idx], shard_bit);
                 u32 const cp_i     = en2->m_cp_data_offset[cp_a_i];
 
@@ -116,7 +121,6 @@ namespace xcore
     // --------------------------------------------------------------------------------------------------------
     // --------------------------------------------------------------------------------------------------------
     const entity_t g_null_entity = (entity_t)ECS_ENTITY_ID_MASK;
-
 
     // primed size list reaching until 8 M
     // 63 items (0x3F)

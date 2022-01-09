@@ -75,7 +75,7 @@ namespace xcore
         }
     }
 
-    static u32 s_create_entity(entity0_store_t* es, alloc_t* allocator)
+    static entity_t s_create_entity(entity0_store_t* es, alloc_t* allocator)
     {
         // A hierarchical bitset can quickly tell us the lowest free entity
         s8 const o3 = xfindFirstBit(es->m_level3);
@@ -115,15 +115,18 @@ namespace xcore
             es->m_level0[o0] = (u8)ne;
         }
 
-        // Need to create entity2_t
-
-        e.m_en2_index  = index_t(0,0);
+        // Need to create entity2_t or do we delay it until an actual component is registered on the entity?
+        e.m_en2_index  = index_t(ECS_ENTITY_VERSION_MAX,ECS_ENTITY_ID_MASK);
         e.m_cp1_bitset = 0;
         e.m_cp2_bitcnt = 0;
         for (s32 i = 0; i < 5; ++i)
             e.m_cp2_bitset[i] = 0;
+        
+        return index_t(0, eo).m_value;
+    }
 
-        return eo;
+    static void s_delete_entity(entity0_store_t* es, entity_t e, alloc_t* allocator)
+    {
     }
 
 } // namespace xcore
