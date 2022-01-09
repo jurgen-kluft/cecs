@@ -41,11 +41,11 @@ UNITTEST_SUITE_BEGIN(ecs)
 
         UNITTEST_TEST(create)
         {
-            ecs_t* ecs = g_ecs_create();
+            // ecs_t* ecs = g_ecs_create();
 
-            cp_type_t bytecmp          = g_register_component_type<u8>(ecs);
-            cp_type_t poscmp           = g_register_component_type<position_t>(ecs);
-            cp_type_t velcmp           = g_register_component_type<velocity_t>(ecs);
+            // cp_type_t bytecmp          = g_register_component_type<u8>(ecs);
+            // cp_type_t poscmp           = g_register_component_type<position_t>(ecs);
+            // cp_type_t velcmp           = g_register_component_type<velocity_t>(ecs);
         }
     }
 }
