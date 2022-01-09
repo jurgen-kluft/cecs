@@ -19,7 +19,7 @@ namespace xcore
         entity2_store_t    m_entity2_store;
     };
 
-    static ecs2_t* s_ecs_create(alloc_t* allocator)
+    ecs2_t* g_ecs_create(alloc_t* allocator)
     {
         ecs2_t* ecs      = (ecs2_t*)allocator->allocate(sizeof(ecs2_t));
         ecs->m_allocator = allocator;
@@ -29,11 +29,6 @@ namespace xcore
         s_init(&ecs->m_entity2_store, 1024, 4, allocator);
 
         return ecs;
-    }
-
-    ecs2_t* g_ecs_create(alloc_t* allocator)
-    {
-        return s_ecs_create(allocator);
     }
 
     cp_type_t const* g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name)

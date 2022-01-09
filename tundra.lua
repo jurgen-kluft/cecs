@@ -69,6 +69,7 @@ Build {
 			CXXOPTS = {
 				"-std=c++11",
 				"-arch x86_64",
+				"-g",
 				"-Wno-new-returns-null",
 				"-Wno-missing-braces",
 				"-Wno-unused-function",
