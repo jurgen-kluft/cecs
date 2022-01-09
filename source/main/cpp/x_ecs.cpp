@@ -31,6 +31,16 @@ namespace xcore
         return ecs;
     }
 
+    ecs2_t* g_ecs_create(alloc_t* allocator)
+    {
+        return s_ecs_create(allocator);
+    }
+
+    cp_type_t const* g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name)
+    {
+        return s_cp_register_cp_type(&r->m_component_store, cp_sizeof, cp_name);
+    }
+
     // --------------------------------------------------------------------------------------------------------
     // entity functionality
 

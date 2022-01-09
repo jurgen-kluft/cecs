@@ -82,7 +82,7 @@ namespace xcore
         x_memset(cps->m_a_cp_store, 0, sizeof(cp_store_t) * cps->m_num_cp_store);
     }
 
-    static void s_cp_exit(components_store_t* cps, alloc_t* allocator)
+    static void s_exit(components_store_t* cps, alloc_t* allocator)
     {
         for (u32 i=0; i<cps->m_num_cp_store; ++i)
         {

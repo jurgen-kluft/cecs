@@ -13,8 +13,6 @@ namespace xcore
     //   - 22 bits for the entity count (4 million)
     //   - 10 bit for the version(resets in[0 - 1023]).
 
-    // Use the functions g_entity_version and g_entity_id to retrieve each part of an entity_t.
-
     // clang-format off
     typedef u32 entity_t;
     typedef u32 entity_ver_t;
@@ -23,16 +21,15 @@ namespace xcore
     #define ECS_ENTITY_ID_MASK       ((u32)0x003FFFFF)   // Mask to use to get the entity number out of an identifier
     #define ECS_ENTITY_VERSION_MASK  ((u32)0xFFC00000)   // Mask to use to get the version out of an identifier
     #define ECS_ENTITY_VERSION_MAX   ((u32)0x000003FF)   // Maximum version
-    #define ECS_ENTITY_VERSION_SHIFT ((s8)20)            // Extent of the entity number within an identifier
+    #define ECS_ENTITY_VERSION_SHIFT ((s8)22)            // Extent of the entity number within an identifier
     inline entity_ver_t g_entity_version(entity_t e)                        { return ((u32)e & ECS_ENTITY_VERSION_MASK)>>ECS_ENTITY_VERSION_SHIFT; }
     inline entity_id_t  g_entity_id(entity_t e)                             { return (u32)e & ECS_ENTITY_ID_MASK; }
     inline entity_t     g_make_entity(entity_id_t id, entity_ver_t version) { return (u32)id | ((u32)version<<ECS_ENTITY_VERSION_SHIFT); }
 
     extern const entity_t g_null_entity;
-
     // clang-format on
 
-    // Component Type identifier information.
+    // Component Type - identifier information
     struct cp_type_t
     {
         u32 const         cp_id;
@@ -40,14 +37,13 @@ namespace xcore
         const char* const cp_name;
     };
 
-    struct ecs_t;
+    struct ecs2_t;
+    extern ecs2_t* g_ecs_create(alloc_t* allocator);
 
     // Registers a component type and returns its type information
-    cp_type_t g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cpname);
-
+    cp_type_t const* g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name);
     template <typename T> inline const char* nameof() { return "?"; }
-
-    template <typename T> cp_type_t g_register_component_type(ecs_t* r) { return g_register_component_type(r, sizeof(T), nameof<T>()); }
+    template <typename T> cp_type_t const* g_register_component_type(ecs2_t* r) { return g_register_component_type(r, sizeof(T), nameof<T>()); }
 
 
 } // namespace xcore
