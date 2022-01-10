@@ -23,10 +23,10 @@ namespace xcore
 
     static void s_cp_store_init(cp_store_t* cp_store, cp_type_t const& cp_type, alloc_t* allocator)
     {
-        cp_store->m_cap_size                   = index_t(0, 0);
-        u32 const cp_capacity                  = s_cp_store_capacities[0];
-        cp_store->m_cp_data                    = (u8*)allocator->allocate(cp_capacity * cp_type.cp_sizeof);
-        cp_store->m_cp_entity_id               = (u8*)allocator->allocate(cp_capacity * 3); // 3 bytes per entity id
+        cp_store->m_cap_size     = index_t(0, 0);
+        u32 const cp_capacity    = s_cp_store_capacities[0];
+        cp_store->m_cp_data      = (u8*)allocator->allocate(cp_capacity * cp_type.cp_sizeof);
+        cp_store->m_cp_data_used = (u8*)allocator->allocate(cp_capacity);
     }
 
     static void s_cp_store_exit(cp_store_t* cp_store, alloc_t* allocator)
@@ -35,9 +35,8 @@ namespace xcore
         if (cp_store->m_cp_data != nullptr)
         {
             allocator->deallocate(cp_store->m_cp_data);
-            allocator->deallocate(cp_store->m_cp_entity_id);
-            cp_store->m_cp_data                    = nullptr;
-            cp_store->m_cp_entity_id               = nullptr;
+            allocator->deallocate(cp_store->m_cp_data_used);
+            cp_store->m_cp_data = nullptr;
         }
     }
 
@@ -115,10 +114,10 @@ namespace xcore
     static void s_cp_store_grow(cp_store_t* cp_store, cp_type_t const& cp_type, alloc_t* allocator)
     {
         cp_store->m_cap_size.set_index(cp_store->m_cap_size.get_index() + 1);
-        u32 const cap                          = m_cap_size.get_index();
-        u32 const size                         = m_cap_size.get_offset();
-        cp_store->m_cp_data                    = (u8*)s_reallocate(cp_store->m_cp_data, size * cp_type.cp_sizeof, s_cp_store_capacities[cap] * cp_type.cp_sizeof, allocator);
-        cp_store->m_cp_entity_id               = (u8*)s_reallocate(cp_store->m_cp_entity_id, size * 3, s_cp_store_capacities[cap] * 3, allocator);
+        u32 const cap            = cp_store->m_cap_size.get_index();
+        u32 const size           = cp_store->m_cap_size.get_offset();
+        cp_store->m_cp_data      = (u8*)s_reallocate(cp_store->m_cp_data, size * cp_type.cp_sizeof, s_cp_store_capacities[cap] * cp_type.cp_sizeof, allocator);
+        cp_store->m_cp_data_used = (u8*)s_reallocate(cp_store->m_cp_data, size, s_cp_store_capacities[cap], allocator);
     }
 
     static inline u8* s_cp_store_get_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 cp_index)
@@ -127,30 +126,9 @@ namespace xcore
         return cp_data;
     }
 
-    static void s_cp_store_dealloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 cp_index)
-    {
-        // user should check if the entity that is processed is unequal to the 'changed entity id' to
-        // see if it needs to update component index.
-        u32 const last_cp_index = cp_store->m_cap_size.get_offset() - 1;
-        changed_entity_id       = cp_store->m_cp_entity_id[last_cp_index];
-        if (cp_index != last_cp_index)
-        {
-            // mark entry as deleted
-        }
-        new_cp_index = cp_index;
-        cp_store->m_cap_size.get_offset() -= 1;
-    }
+    static void s_cp_store_dealloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 index) {}
 
-    static u32 s_cp_store_alloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, alloc_t* allocator)
-    {
-        // return index of newly allocated component
-        if (cp_store->m_cap_size.get_offset() == s_cp_store_capacities[cp_store->m_capacity_index])
-        {
-            s_cp_store_grow(cp_store, cp_type, allocator);
-        }
-        u32 const new_index = cp_store->m_cap_size.get_offset()++;
-        return new_index;
-    }
+    static u32 s_cp_store_alloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, alloc_t* allocator) { return 0; }
 
     static u32 s_component_alloc(components_store_t* cps, cp_type_t const* cp_type, alloc_t* allocator)
     {
@@ -158,11 +136,11 @@ namespace xcore
         return s_cp_store_alloc_cp(cp_store, *cp_type, allocator);
     }
 
-    static void s_component_dealloc(components_store_t* cps, u32 cp_id, u32 cp_offset, entity_id_t& changed_entity_id, u32& new_cp_offset)
+    static void s_component_dealloc(components_store_t* cps, u32 cp_id, u32 index, entity_id_t& changed_entity_id, u32& new_cp_offset)
     {
         cp_type_t*  cp_type  = (cp_type_t*)&cps->m_a_cp_type[cp_id];
         cp_store_t* cp_store = &cps->m_a_cp_store[cp_id];
-        s_cp_store_dealloc_cp(cp_store, *cp_type, cp_offset, changed_entity_id, new_cp_offset);
+        s_cp_store_dealloc_cp(cp_store, *cp_type, index);
     }
 
 } // namespace xcore
