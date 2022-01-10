@@ -5,6 +5,9 @@
 #pragma once
 #endif
 
+#include "xbase/x_allocator.h"
+#include "xecs/private/x_ecs_types.h"
+
 namespace xcore
 {
     static constexpr const s32 s_entity2_array_capacities_count = 60;
@@ -12,48 +15,19 @@ namespace xcore
                                                                998,    1262,   1594,   2018,   2518,   3194,   4022,   5078,   6406,   8054,    10174,   12842,   16178,   20386,   25706,   32386,   40798,   51434,   64802,  81646, 102874,
                                                                129622, 163298, 205754, 259214, 326614, 411518, 518458, 653234, 823054, 1037018, 1306534, 1646234, 2074118, 2613202, 3292474, 4148258, 5226458, 6584978, 8296558};
 
-    static inline void s_set_u24(u8* ptr, u32 i, u32 v)
-    {
-        ptr += (i << 1) + i;
-        ptr[0] = (u8)(v << 16);
-        ptr[1] = (u8)(v << 8);
-        ptr[2] = (u8)(v << 0);
-    }
-
-    static inline u32 s_get_u24(u8 const* ptr, u32 i)
-    {
-        ptr += (i << 1) + i;
-        u32 const v = (ptr[0] << 16) | (ptr[1] << 8) | (ptr[2] << 0);
-        return v;
-    }
-
-    struct entity2_t
-    {
-        entity_id_t m_en0_index;        // The entity0 owner of this struct
-        u8          m_cp_data_offset[]; // N-size, depends on the the number of bits set in m_cp_bitset (see @s_compute_entity2_struct_size())
-    };
-
     // NOTE: This controls the step size of the entity2_t structure and thus the amount of array's that are managed
     static inline u32 s_compute_entity2_struct_size(u16 entity2_ai) { return (entity2_ai * 12) + 4; }
     static inline u32 s_compute_entity2_array_index(u32 cp_count) { return cp_count >> 2; }
 
-    struct entity2_array_t
-    {
-        u32        m_size;
-        u32        m_capi;
-        entity2_t* m_array;
-    };
-
-    struct entity2_store_t
-    {
-        inline entity2_store_t()
-            : m_num_arrays(0)
-            , m_arrays(nullptr)
-        {
-        }
-        u32 m_num_arrays;
-        entity2_array_t* m_arrays;
-    };
+	static void s_exit(entity2_array_t* ea, alloc_t* allocator)
+	{
+		if (ea->m_array != nullptr)
+		{
+			allocator->deallocate(ea->m_array);
+		}
+		ea->m_size = 0;
+		ea->m_capi = 0;
+	}
 
     static void s_init(entity2_store_t* es, u32 max_components, u32 sizestep, alloc_t* allocator)
     {
@@ -62,10 +36,20 @@ namespace xcore
         x_memset(es->m_arrays, 0, es->m_num_arrays * sizeof(entity2_array_t));
     }
 
+    static void s_exit(entity2_store_t* es, alloc_t* allocator)
+    {
+        for (s32 i = 0; i < es->m_num_arrays; ++i)
+			s_exit(&es->m_arrays[i], allocator);
+        allocator->deallocate(es->m_arrays);
+        es->m_num_arrays = 0;
+        es->m_arrays     = nullptr;
+    }
+
     static entity2_t* s_get_entity2(entity2_store_t* es, index_t i)
     {
-        entity2_array_t* a = &es->m_arrays[i.get_index()];
-        return &a->m_array[i.get_offset()];
+        u32 const byte_offset = i.get_offset() * s_compute_entity2_struct_size(i.get_index());
+        entity2_array_t* a = es->m_arrays[i.get_index()];
+        return (entity2_t*)(a->m_array + byte_offset);
     }
 
     // Ensure the entity2 array has enough space for en2_count new entities
@@ -130,10 +114,10 @@ namespace xcore
         if (el.m_value != e2.m_value)
         {
             // swap removal
-            entity2_t* cep = &ca->m_array[e2.get_offset()];
+            entity2_t*       cep = &ca->m_array[e2.get_offset()];
             entity2_t const* lep = &ca->m_array[el.get_offset()];
             x_memcpy(cep, lep, s_compute_entity2_struct_size(cai));
-            
+
             // TODO: logic for shrinking the size of the array
             ca->m_size -= 1;
 
