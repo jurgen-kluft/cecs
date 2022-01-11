@@ -33,33 +33,6 @@ namespace xcore
         allocator->deallocate(ecs);
     }
 
-    // --------------------------------------------------------------------------------------------------------
-    // hierarchical bit buffer (max 32768 bits, 3 levels)
-
-    void s_init(entity_hbb_t* ehbb, u32 size, alloc_t* allocator)
-    {
-        ehbb->m_size = size;   
-        ehbb->m_level2 = 0xFFFFFFFF;
-        
-        size = (size + (32 - 1)) & ~(32 - 1); // align up, multiple of 32
-        u32 const level0_size = size >> 5;
-        u32 const level1_size = ((size + 31) >> 5);
-        ehbb->m_level0 = allocator->allocate(sizeof(u32) * (level0_size + level1_size));
-        ehbb->m_level1 = ehbb->m_level0 + level0_size;
-        x_memset(ehbb->m_level0, 0xFFFFFFFF, sizeof(u32) * (level0_size + level1_size));
-
-        // clear the part in the hierarchy that falls outside of the incoming 
-    }
-
-    void s_exit(entity_hbb_t* ehbb, alloc_t* allocator)
-    {
-        allocator->deallocate(ehbb->m_level0);
-        ehbb->m_level2 = 0;
-        ehbb->m_level1 = 0;
-        ehbb->m_level0 = 0;
-    }
-
-
     cp_type_t const* g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name) { return s_cp_register_cp_type(&r->m_component_store, cp_sizeof, cp_name); }
 
     // --------------------------------------------------------------------------------------------------------

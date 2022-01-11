@@ -5,6 +5,8 @@
 #pragma once
 #endif
 
+#include "xbase/x_hbb.h"
+
 namespace xcore
 {
     class alloc_t;
@@ -52,16 +54,6 @@ namespace xcore
         u8* m_entity_id_to_cp_data_index;
     };
 
-    struct entity_hbb_t
-    {
-        u32* m_level0;
-        u32* m_level1;
-        u32  m_level2;
-        u32  m_size; // maximum bits on level 1, / 32 = size of level 2 in bits
-        s32  get_free(u32 from) const;
-        void set_used(s32 item);
-    };
-
     static void s_init(entity_hbb_t* ehbb, u32 size, alloc_t* allocator);
     static void s_exit(entity_hbb_t* ehbb, alloc_t* allocator);
 
@@ -91,7 +83,7 @@ namespace xcore
 
     struct entity0_store_t
     {
-        entity_hbb_t m_entity_hbb;
+        hbb_t        m_entity_hbb;
         index_t      m_cap_size;
         u8*          m_level0;
         entity0_t*   m_array;

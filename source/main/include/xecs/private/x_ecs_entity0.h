@@ -59,7 +59,8 @@ namespace xcore
 
     static void s_init(entity0_store_t* es, alloc_t* allocator)
     {
-        s_init(&es->m_entity_hbb, (1 << ECS_ENTITY_VERSION_SHIFT) / 256, allocator);
+        u32 hbb_config;
+        init(es->m_entity_hbb, (1 << ECS_ENTITY_VERSION_SHIFT) / 256, hbb_config, allocator);
         es->m_level0 = (u8*)allocator->allocate(sizeof(u8) * (1 << ECS_ENTITY_VERSION_SHIFT) / 256);
 
         es->m_cap          = 0;
@@ -80,7 +81,7 @@ namespace xcore
 
     static void s_exit(entity0_store_t* es, alloc_t* allocator)
     {
-        s_exitit(&es->m_entity_hbb, allocator);
+        release(es->m_entity_hbb, allocator);
         allocator->deallocate(es->m_level0);        
         allocator->deallocate(es->m_array);
     }
