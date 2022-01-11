@@ -41,23 +41,21 @@ namespace xcore
     extern ecs2_t* g_ecs_create(alloc_t* allocator);
     extern void    g_ecs_destroy(ecs2_t* ecs);
 
-    // Entity functions
-    extern entity_t g_create_entity(ecs2_t* ecs);
-    extern void     g_delete_entity(ecs2_t* ecs, entity_t entity);
-
-    // Component functions
-    extern bool                     g_attach_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
-    extern void                     g_dettach_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
-    extern void*                    g_get_component_data(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
-    template <typename T> extern T* g_get_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { return (T*)g_get_component_data(ecs, entity, cp_type); }
-
-    // Signature functions (for iterators)
-    extern void 
+    // Entity Type
+    struct entity_type_t;
+    entity_type_t const* g_register_entity_type(ecs2_t* r, u32 max_entities);
 
     // Registers a component type and returns its type information
     template <typename T> inline const char* nameof() { return "?"; }
     cp_type_t const*                         g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name);
     template <typename T> cp_type_t const*   g_register_component_type(ecs2_t* r) { return g_register_component_type(r, sizeof(T), nameof<T>()); }
+
+    extern entity_t                 g_create_entity(ecs2_t* ecs, entity_type_t const* en_type);
+    extern void                     g_delete_entity(ecs2_t* ecs, entity_t entity);
+    extern bool                     g_attach_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
+    extern void                     g_dettach_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
+    extern void*                    g_get_component_data(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
+    template <typename T> extern T* g_get_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { return (T*)g_get_component_data(ecs, entity, cp_type); }
 
 } // namespace xcore
 

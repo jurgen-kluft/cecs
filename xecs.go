@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/jurgen-kluft/xcode"
+	xcode "github.com/jurgen-kluft/xcode"
 	pkg "github.com/jurgen-kluft/xecs/package"
 )
 
