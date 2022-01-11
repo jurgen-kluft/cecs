@@ -58,7 +58,8 @@ namespace xcore
 
     extern entity_t                 g_create_entity(ecs2_t* ecs, entity_type_t const* en_type);
     extern void                     g_delete_entity(ecs2_t* ecs, entity_t entity);
-    extern bool                     g_attach_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
+    extern bool                     g_has_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
+    extern void                     g_attach_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
     extern void                     g_dettach_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
     extern void*                    g_get_component_data(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
     template <typename T> extern T* g_get_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { return (T*)g_get_component_data(ecs, entity, cp_type); }

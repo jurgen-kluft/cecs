@@ -33,6 +33,9 @@ namespace xcore
     }
 
     static entity_type_t* s_get_entity_type(entity_type_store_t* es, u32 entity_type_id) { return &es->m_a_entity_type[entity_type_id]; }
+    static bool           s_has_component(entity_type_t const* es, u32 cp_id) { return es->m_a_cp_store_offset[cp_id] != -1; }
+    static u32            s_get_component_data_offset(entity_type_t const* es, u32 cp_id) { return es->m_a_cp_store_offset[cp_id]; }
+    static void           s_set_component_data_offset(entity_type_t* es, u32 cp_id, u32 cp_offset) { es->m_a_cp_store_offset[cp_id] = cp_offset; }
 
     static entity_type_t* s_register_entity_type(entity_type_store_t* es, u32 max_entities, alloc_t* allocator)
     {
@@ -41,16 +44,16 @@ namespace xcore
         {
             clr(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, entity_type_id);
 
-            entity_type_t* et = &es->m_a_entity_type[entity_type_id];
+            entity_type_t* et       = &es->m_a_entity_type[entity_type_id];
             et->m_a_cp_store_offset = (u32*)allocator->allocate(sizeof(u32) * components_store_t::COMPONENTS_MAX);
             et->m_entity_lll        = (u8*)allocator->allocate(sizeof(u8) * (max_entities / 256));
             et->m_entity_array      = (entity_t*)allocator->allocate(sizeof(entity_t) * max_entities);
 
-            for (s32 i=0; i<components_store_t::COMPONENTS_MAX; ++i)
+            for (s32 i = 0; i < components_store_t::COMPONENTS_MAX; ++i)
                 et->m_a_cp_store_offset[i] = -1;
-            for (s32 i=0; i<max_entities; ++i)
+            for (s32 i = 0; i < max_entities; ++i)
                 et->m_entity_lll[i] = 0;
-            for (s32 i=0; i<max_entities; ++i)
+            for (s32 i = 0; i < max_entities; ++i)
                 et->m_entity_array[i] = g_null_entity;
 
             init(et->m_entity_hbb, max_entities, et->m_entity_hbb_config, 1, allocator);
@@ -70,8 +73,8 @@ namespace xcore
         s_clear(&es->m_a_entity_type[entity_type_id]);
     }
 
-    static void s_exit(entity_type_store_t* es, alloc_t* allocator) 
-    { 
+    static void s_exit(entity_type_store_t* es, alloc_t* allocator)
+    {
         for (s32 i = 0; i < entity_type_store_t::ENTITY_TYPE_MAX; ++i)
         {
             u32 const entity_type_id = i;

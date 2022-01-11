@@ -56,8 +56,8 @@ namespace xcore
         }
         allocator->deallocate(cps->m_a_cp_type);
         allocator->deallocate(cps->m_a_cp_store);
-        cps->m_a_cp_type    = nullptr;
-        cps->m_a_cp_store   = nullptr;
+        cps->m_a_cp_type  = nullptr;
+        cps->m_a_cp_store = nullptr;
         init(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, 1);
     }
 
@@ -92,36 +92,76 @@ namespace xcore
         return data;
     }
 
-    static void s_cp_store_grow(cp_store_t* cp_store, cp_type_t const& cp_type, alloc_t* allocator)
+    static void s_cp_store_grow(cp_store_t* cp_store, cp_type_t const& cp_type, u32 count, alloc_t* allocator)
     {
-        cp_store->m_cap_size.set_index(cp_store->m_cap_size.get_index() + 1);
+        while ((cp_store->m_cap_size.get_offset() + count) > s_cp_store_capacities[cp_store->m_cap_size.get_index()])
+            cp_store->m_cap_size.set_index(cp_store->m_cap_size.get_index() + 1);
+
         u32 const cap            = cp_store->m_cap_size.get_index();
         u32 const size           = cp_store->m_cap_size.get_offset();
         cp_store->m_cp_data      = (u8*)s_reallocate(cp_store->m_cp_data, size * cp_type.cp_sizeof, s_cp_store_capacities[cap] * cp_type.cp_sizeof, allocator);
         cp_store->m_cp_data_used = (u8*)s_reallocate(cp_store->m_cp_data, size, s_cp_store_capacities[cap], allocator);
     }
 
-    static inline u8* s_cp_store_get_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 cp_index)
+    static inline u8* s_cp_store_get_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 cp_offset)
     {
-        u8* cp_data = cp_store->m_cp_data + (cp_type.cp_sizeof * cp_index);
+        u8* cp_data = cp_store->m_cp_data + (cp_type.cp_sizeof * cp_offset);
         return cp_data;
     }
 
-    static void s_cp_store_dealloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 index) {}
-
-    static u32 s_cp_store_alloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, alloc_t* allocator) { return 0; }
-
-    static u32 s_component_alloc(components_store_t* cps, cp_type_t const* cp_type, alloc_t* allocator)
+    static u32 s_cp_store_alloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 count, alloc_t* allocator)
     {
-        cp_store_t* cp_store = &cps->m_a_cp_store[cp_type->cp_id];
-        return s_cp_store_alloc_cp(cp_store, *cp_type, allocator);
+        // TODO: Implement
+        return 0;
     }
 
-    static void s_component_dealloc(components_store_t* cps, u32 cp_id, u32 index, entity_id_t& changed_entity_id, u32& new_cp_offset)
+    static void s_cp_store_dealloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 offset, u32 count)
     {
-        cp_type_t*  cp_type  = (cp_type_t*)&cps->m_a_cp_type[cp_id];
-        cp_store_t* cp_store = &cps->m_a_cp_store[cp_id];
-        s_cp_store_dealloc_cp(cp_store, *cp_type, index);
+        // TODO: Implement
+        return;
+    }
+
+    static u32 s_components_alloc(components_store_t* cps, cp_type_t const* cp_type, u32 count, alloc_t* allocator)
+    {
+        cp_store_t* cp_store = &cps->m_a_cp_store[cp_type->cp_id];
+        return s_cp_store_alloc_cp(cp_store, *cp_type, count, allocator);
+    }
+
+    static void s_components_dealloc(components_store_t* cps, cp_type_t const* cp_type, u32 offset, u32 count)
+    {
+        cp_store_t* cp_store = &cps->m_a_cp_store[cp_type->cp_id];
+        s_cp_store_dealloc_cp(cp_store, *cp_type, offset, count);
+    }
+
+    static inline void s_components_set_cp_used(components_store_t* cps, cp_type_t const& cp_type, u32 cp_offset)
+    {
+        cp_store_t* cp_store = &cps->m_a_cp_store[cp_type.cp_id];
+        u8*         data     = cp_store->m_cp_data_used;
+        u8 const    bit      = 1 << (cp_offset & 0x7);
+        data[cp_offset >> 3] |= bit;
+    }
+
+    static inline void s_components_set_cp_unused(components_store_t* cps, cp_type_t const& cp_type, u32 cp_offset)
+    {
+        cp_store_t* cp_store = &cps->m_a_cp_store[cp_type.cp_id];
+        u8*         data     = cp_store->m_cp_data_used;
+        u8 const    bit      = 1 << (cp_offset & 0x7);
+        data[cp_offset >> 3] &= ~bit;
+    }
+
+    static inline bool s_components_get_cp_used(components_store_t const* cps, cp_type_t const& cp_type, u32 cp_offset)
+    {
+        cp_store_t* cp_store = &cps->m_a_cp_store[cp_type.cp_id];
+        u8 const*   data     = cp_store->m_cp_data_used;
+        u8 const    bit      = 1 << (cp_offset & 0x7);
+        return (data[cp_offset >> 3] & bit) != 0;
+    }
+
+    static inline u8* s_components_get_cp_data(components_store_t* cps, cp_type_t const& cp_type, u32 cp_offset)
+    {
+        cp_store_t* cp_store = &cps->m_a_cp_store[cp_type.cp_id];
+        u8*         cp_data  = cp_store->m_cp_data + (cp_type.cp_sizeof * cp_offset);
+        return cp_data;
     }
 
 } // namespace xcore
