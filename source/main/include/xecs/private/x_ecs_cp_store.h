@@ -42,18 +42,15 @@ namespace xcore
 
     static void s_init(components_store_t* cps, alloc_t* allocator)
     {
-        cps->m_num_cp_store = 32 * 32;
-        cps->m_bitset1      = 0xFFFFFFFF;
-        x_memset(cps->m_a_bitset0, 0xFFFFFFFF, 32 * sizeof(u32));
-
-        cps->m_a_cp_type  = (cp_type_t*)allocator->allocate(sizeof(cp_type_t) * cps->m_num_cp_store);
-        cps->m_a_cp_store = (cp_store_t*)allocator->allocate(sizeof(cp_store_t) * cps->m_num_cp_store);
-        x_memset(cps->m_a_cp_store, 0, sizeof(cp_store_t) * cps->m_num_cp_store);
+        init(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, 1);
+        cps->m_a_cp_type  = (cp_type_t*)allocator->allocate(sizeof(cp_type_t) * components_store_t::COMPONENTS_MAX);
+        cps->m_a_cp_store = (cp_store_t*)allocator->allocate(sizeof(cp_store_t) * components_store_t::COMPONENTS_MAX);
+        x_memset(cps->m_a_cp_store, 0, sizeof(cp_store_t) * components_store_t::COMPONENTS_MAX);
     }
 
     static void s_exit(components_store_t* cps, alloc_t* allocator)
     {
-        for (u32 i = 0; i < cps->m_num_cp_store; ++i)
+        for (u32 i = 0; i < components_store_t::COMPONENTS_MAX; ++i)
         {
             s_cp_store_exit(&cps->m_a_cp_store[i], allocator);
         }
@@ -61,43 +58,27 @@ namespace xcore
         allocator->deallocate(cps->m_a_cp_store);
         cps->m_a_cp_type    = nullptr;
         cps->m_a_cp_store   = nullptr;
-        cps->m_num_cp_store = 0;
-        cps->m_bitset1      = 0;
-        x_memset(cps->m_a_bitset0, 0, 32 * sizeof(u32));
+        init(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, 1);
     }
 
     static cp_type_t const* s_cp_register_cp_type(components_store_t* cps, u32 cp_sizeof, const char* name)
     {
-        if (cps->m_bitset1 == 0)
-            return nullptr;
+        u32 cp_id;
+        find(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
 
-        s8 const o1 = xfindFirstBit(cps->m_bitset1);
-        s8 const o0 = xfindFirstBit(cps->m_a_bitset0[o1]);
-
-        u32 const cp_id = o1 * 32 + o0;
-
-        cp_nctype_t* cp_type     = (cp_nctype_t*)&cps->m_a_cp_type[o1 * 32 + o0];
+        cp_nctype_t* cp_type     = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
         cp_type[cp_id].cp_id     = cp_id;
         cp_type[cp_id].cp_sizeof = cp_sizeof;
         cp_type[cp_id].cp_name   = name;
 
-        if (s_clr_bit_in_u32(cps->m_a_bitset0[o1], o0) == 0)
-        {
-            // No more free items in here, mark upper level
-            s_clr_bit_in_u32(cps->m_bitset1, o0);
-        }
-
+        clr(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
         return ((cp_type_t const*)cp_type);
     }
 
     static void s_cp_unregister_cp_type(components_store_t* cps, cp_type_t const* cp_type)
     {
-        s8 const o1 = cp_type->cp_id / 32;
-        s8 const o0 = cp_type->cp_id & (32 - 1);
-        if (s_set_bit_in_u32(cps->m_a_bitset0[o1], o0) == 0xFFFFFFFF)
-        {
-            s_set_bit_in_u32(cps->m_bitset1, o1);
-        }
+        u32 const cp_id = cp_type->cp_id;
+        set(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
     }
 
     static void* s_reallocate(void* current_data, u32 current_datasize_in_bytes, u32 datasize_in_bytes, alloc_t* allocator)

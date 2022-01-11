@@ -39,30 +39,15 @@ namespace xcore
 
     struct components_store_t
     {
-        u32         m_num_cp_store;
-        u32         m_bitset1;
-        u32         m_a_bitset0[32]; // To identify which component stores are still free (to give out new component id)
+        enum
+        {
+            COMPONENTS_MAX             = 1024,
+            COMPONENTS_TYPE_HBB_CONFIG = 2, // 1024 maxbits
+        };
+        u32         m_a_cp_hbb[33]; // To identify which component stores are still free (to give out new component id)
         cp_type_t*  m_a_cp_type;     // The type of each store
         cp_store_t* m_a_cp_store;    // N max number of components
     };
-
-    typedef index_t entity0_t;
-
-    inline s32 entity_hbb_t::get_free(u32 from) const
-    {
-        // A hierarchical bitset can quickly tell us the lowest free entity
-        s8 const o3 = xfindFirstBit(m_level2);
-        if (o3 == -1)
-            return -1;
-
-        s8 const o2 = xfindFirstBit(m_level1[o3]);
-        s8 const o1 = xfindFirstBit(m_level0[(o3 * 32) + o2]);
-
-        // o0 is the full index into level 0
-        u32 const o0 = ((u32)o3 * 32 + (u32)o2) * 32 + (u32)o1;
-
-        return o0;
-    }
 
     // Entity Type, (8 + 8 + sizeof(u32)*max-number-of-components) ~4Kb
     // When an entity type registers a component it will allocate component data from the specific store for N entities
@@ -71,34 +56,37 @@ namespace xcore
     // registering another entity type.
     struct entity_type_t
     {
-        entity_id_t m_entity0_id_range[2]; // Entity Range (number of entities)
-        s32*        m_a_cp_store_offset;   // The components allocated start at a certain offset for each cp_store
+        u32       m_max_num_entities;
+        u32       m_entity_hbb_config;
+        u32*      m_a_cp_store_offset; // Could be u24[], the components allocated start at a certain offset for each cp_store
+        hbb_t     m_entity_hbb;
+        u8*       m_entity_lll;
+        entity_t* m_entity_array;
     };
 
-    struct entity0_store_t
-    {
-        hbb_t        m_entity_hbb;
-        index_t      m_cap_size;
-        u8*          m_level0;
-        entity0_t*   m_array;
+    // 1024 maximum number of types
+    // Q: Could we have 6, 10, 16? Which means 6 bit for the version, 10 bit for the entity type and 16 bits for the entity index
+    // Q: Is 65536 entities enough per entity type?
+    // Q: Is 1024 entity types enough?
+    // Q: What is the minimum necessary version bit width?, is 6 bits enough?
 
-        // Maximum number of types?
-        // Q: Is it a must to have a single large entity0 array?, or could we have an entity0 array per type/group?
-        // Q: Can entity_t encode the type inside the u32?
-        // Q: Could we have 5, 9, 18? Which means 5 bit for the version, 9 bit for the entity type and 18 bits for the entity index
-        // Q: Is 262144 entities enough per entity type?
-        // Q: Is 512 entity types enough?
-        // Q: What is the minimum necessary version bit width?, is 5 bits enough?
-        u32 m_entity_type_level1;
-        u16 m_entity_type_level0[32];
+    struct entity_type_store_t
+    {
+        enum
+        {
+            ENTITY_TYPE_MAX        = 256,
+            ENTITY_TYPE_HBB_CONFIG = (8 << 5) | 2, // 256 maxbits
+        };
+
+        u32            m_entity_type_hbb[9];
         entity_type_t* m_a_entity_type;
     };
 
     struct ecs2_t
     {
-        alloc_t*           m_allocator;
-        components_store_t m_component_store;
-        entity0_store_t    m_entity0_store;
+        alloc_t*            m_allocator;
+        components_store_t  m_component_store;
+        entity_type_store_t m_entity_type_store;
     };
 
     static inline s8 s_compute_index(u32 const bitset, u32 bit)
@@ -120,6 +108,11 @@ namespace xcore
         bitset               = bitset | (1 << bit);
         return old_bitset;
     }
+
+    struct u24
+    {
+        u8 b[3];
+    };
 
     static inline void s_set_u24(u8* ptr, u32 i, u32 v)
     {
