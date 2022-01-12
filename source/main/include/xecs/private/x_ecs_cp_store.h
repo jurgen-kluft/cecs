@@ -42,7 +42,7 @@ namespace xcore
 
     static void s_init(components_store_t* cps, alloc_t* allocator)
     {
-        init(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, 1);
+        g_hbb_init(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, 1);
         cps->m_a_cp_type  = (cp_type_t*)allocator->allocate(sizeof(cp_type_t) * components_store_t::COMPONENTS_MAX);
         cps->m_a_cp_store = (cp_store_t*)allocator->allocate(sizeof(cp_store_t) * components_store_t::COMPONENTS_MAX);
         x_memset(cps->m_a_cp_store, 0, sizeof(cp_store_t) * components_store_t::COMPONENTS_MAX);
@@ -58,27 +58,27 @@ namespace xcore
         allocator->deallocate(cps->m_a_cp_store);
         cps->m_a_cp_type  = nullptr;
         cps->m_a_cp_store = nullptr;
-        init(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, 1);
+        g_hbb_init(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, 1);
     }
 
     static cp_type_t const* s_cp_register_cp_type(components_store_t* cps, u32 cp_sizeof, const char* name)
     {
         u32 cp_id;
-        find(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
+        g_hbb_find(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
 
         cp_nctype_t* cp_type     = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
         cp_type[cp_id].cp_id     = cp_id;
         cp_type[cp_id].cp_sizeof = cp_sizeof;
         cp_type[cp_id].cp_name   = name;
 
-        clr(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
+        g_hbb_clr(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
         return ((cp_type_t const*)cp_type);
     }
 
     static void s_cp_unregister_cp_type(components_store_t* cps, cp_type_t const* cp_type)
     {
         u32 const cp_id = cp_type->cp_id;
-        set(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
+        g_hbb_set(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
     }
 
     static void* s_reallocate(void* current_data, u32 current_datasize_in_bytes, u32 datasize_in_bytes, alloc_t* allocator)

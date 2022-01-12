@@ -15,19 +15,17 @@ namespace xcore
     // [index:12-bit, offset:20-bit]
     struct index_t
     {
-        inline index_t()
-            : m_value(0xFFFFFFFF)
-        {
-        }
-        inline index_t(u16 index, u32 offset)
-            : m_value((offset & 0x000FFFFF) | ((index << 20) & 0xFFF00000))
-        {
-        }
-        inline bool is_null() const { return m_value == 0xFFFFFFFF; }
-        inline u16  get_index() const { return ((m_value & 0xFFF00000) >> 20); }
-        inline u32  get_offset() const { return m_value & 0x000FFFFF; }
-        inline void set_index(u16 index) { m_value = (m_value & 0x000FFFFF) | ((index << 20) & 0xFFF00000); }
-        inline void set_offset(u32 offset) { m_value = (m_value & 0xFFF00000) | (offset & 0x000FFFFF); }
+        // clang-format off
+        enum { NILL_VALUE = 0xFFFFFFFF, INDEX_MASK = 0xFFF00000, INDEX_SHIFT = 20, OFFSET_MASK = 0x000FFFFF };
+        inline index_t() : m_value(NILL_VALUE) {}
+        inline index_t(u16 index, u32 offset) : m_value((offset & OFFSET_MASK) | ((index << INDEX_SHIFT) & INDEX_MASK)) {}
+        // clang-format on
+
+        inline bool is_null() const { return m_value == NILL_VALUE; }
+        inline u16  get_index() const { return ((m_value & INDEX_MASK) >> INDEX_SHIFT); }
+        inline u32  get_offset() const { return m_value & OFFSET_MASK; }
+        inline void set_index(u16 index) { m_value = (m_value & OFFSET_MASK) | ((index << INDEX_SHIFT) & INDEX_MASK); }
+        inline void set_offset(u32 offset) { m_value = (m_value & INDEX_MASK) | (offset & OFFSET_MASK); }
         u32         m_value;
     };
 
@@ -46,7 +44,7 @@ namespace xcore
             COMPONENTS_TYPE_HBB_CONFIG = 2, // 1024 maxbits
         };
         u32         m_a_cp_hbb[33]; // To identify which component stores are still free (to give out new component id)
-        cp_type_t*  m_a_cp_type;    // The type of each store
+        cp_type_t*  m_a_cp_type;    // The type information attached to each store
         cp_store_t* m_a_cp_store;   // N max number of components
     };
 
@@ -57,18 +55,12 @@ namespace xcore
     // registering another entity type.
     struct entity_type_t
     {
-        index_t   m_max_num_entities;
-        u32       m_entity_hbb_config;
-        u32*      m_a_cp_store_offset; // Could be u24[], the components allocated start at a certain offset for each cp_store
-        hbb_t     m_entity_hbb;
-        u8*       m_entity_array; // Just versions
+        index_t m_type_id_and_size;
+        u32     m_entity_hbb_config;
+        u32*    m_a_cp_store_offset; // Could be u24[], the components allocated start at a certain offset for each cp_store
+        hbb_t   m_entity_hbb;
+        u8*     m_entity_array; // Just versions
     };
-
-    // 1024 maximum number of types
-    // Q: Could we have 6, 10, 16? Which means 6 bit for the version, 10 bit for the entity type and 16 bits for the entity index
-    // Q: Is 65536 entities enough per entity type?
-    // Q: Is 1024 entity types enough?
-    // Q: What is the minimum necessary version bit width?, is 6 bits enough?
 
     struct entity_type_store_t
     {
@@ -79,7 +71,7 @@ namespace xcore
         };
 
         u32            m_entity_type_hbb[9];
-        entity_type_t* m_a_entity_type;
+        entity_type_t* m_entity_type_array;
     };
 
     struct ecs2_t

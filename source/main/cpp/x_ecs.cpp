@@ -62,7 +62,7 @@ namespace xcore
         u32 cp_offset = s_get_component_data_offset(entity_type, cp_type.cp_id);
         if (cp_offset == 0xFFFFFFFF)
         {
-            cp_offset = s_components_alloc(&ecs->m_component_store, &cp_type, entity_type->m_max_num_entities.get_offset(), ecs->m_allocator);
+            cp_offset = s_components_alloc(&ecs->m_component_store, &cp_type, entity_type->m_type_id_and_size.get_offset(), ecs->m_allocator);
             s_set_component_data_offset(entity_type, cp_type.cp_id, cp_offset);
         }
         // Now set the mark for this entity that he has attached this component
