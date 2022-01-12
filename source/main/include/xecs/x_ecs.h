@@ -9,8 +9,8 @@
 
 namespace xcore
 {
-    extern ecs2_t* g_ecs_create(alloc_t* allocator);
-    extern void    g_ecs_destroy(ecs2_t* ecs);
+    extern ecs2_t* g_create_ecs(alloc_t* allocator);
+    extern void    g_destroy_ecs(ecs2_t* ecs);
 
     // Entity Type
     en_type_t const* g_register_entity_type(ecs2_t* r, u32 max_entities);
