@@ -56,6 +56,9 @@ namespace xcore
     cp_type_t const*                         g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name);
     template <typename T> cp_type_t const*   g_register_component_type(ecs2_t* r) { return g_register_component_type(r, sizeof(T), nameof<T>()); }
 
+	// TODO: Add tags as a bit for each entity, e.g. a hbb_t for each tag.
+	// So in the same manner a component we can have a entity_tag_t.
+
     extern entity_t                 g_create_entity(ecs2_t* ecs, entity_type_t const* en_type);
     extern void                     g_delete_entity(ecs2_t* ecs, entity_t entity);
     extern bool                     g_has_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type);
