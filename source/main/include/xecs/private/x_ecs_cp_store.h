@@ -21,14 +21,6 @@ namespace xcore
         const char* cp_name;
     };
 
-    static void s_cp_store_init(cp_store_t* cp_store, cp_type_t const& cp_type, alloc_t* allocator)
-    {
-        cp_store->m_cap_size     = index_t(0, 0);
-        u32 const cp_capacity    = s_cp_store_capacities[0];
-        cp_store->m_cp_data      = (u8*)allocator->allocate(cp_capacity * cp_type.cp_sizeof);
-        cp_store->m_cp_data_used = (u8*)allocator->allocate(cp_capacity);
-    }
-
     static void s_cp_store_exit(cp_store_t* cp_store, alloc_t* allocator)
     {
         cp_store->m_cap_size = index_t(0, 0);
@@ -64,21 +56,29 @@ namespace xcore
     static cp_type_t const* s_cp_register_cp_type(components_store_t* cps, u32 cp_sizeof, const char* name)
     {
         u32 cp_id;
-        g_hbb_find(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
+        if (g_hbb_find(cps->m_a_cp_hbb, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, components_store_t::COMPONENTS_MAX, cp_id))
+        {
+            cp_nctype_t* cp_type     = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
+            cp_type[cp_id].cp_id     = cp_id;
+            cp_type[cp_id].cp_sizeof = cp_sizeof;
+            cp_type[cp_id].cp_name   = name;
 
-        cp_nctype_t* cp_type     = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
-        cp_type[cp_id].cp_id     = cp_id;
-        cp_type[cp_id].cp_sizeof = cp_sizeof;
-        cp_type[cp_id].cp_name   = name;
+            g_hbb_clr(cps->m_a_cp_hbb, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, components_store_t::COMPONENTS_MAX, cp_id);
+            return ((cp_type_t const*)cp_type);
+        }
+        return nullptr;
+    }
 
-        g_hbb_clr(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
-        return ((cp_type_t const*)cp_type);
+    static cp_type_t* s_cp_get_cp_type(components_store_t* cps, u32 cp_id)
+    {
+        cp_type_t* cp_type = (cp_type_t*)&cps->m_a_cp_type[cp_id];
+        return cp_type;
     }
 
     static void s_cp_unregister_cp_type(components_store_t* cps, cp_type_t const* cp_type)
     {
         u32 const cp_id = cp_type->cp_id;
-        g_hbb_set(cps->m_a_cp_hbb, components_store_t::COMPONENTS_MAX, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, cp_id);
+        g_hbb_set(cps->m_a_cp_hbb, components_store_t::COMPONENTS_TYPE_HBB_CONFIG, components_store_t::COMPONENTS_MAX, cp_id);
     }
 
     static void* s_reallocate(void* current_data, u32 current_datasize_in_bytes, u32 datasize_in_bytes, alloc_t* allocator)
@@ -92,17 +92,6 @@ namespace xcore
         return data;
     }
 
-    static void s_cp_store_grow(cp_store_t* cp_store, cp_type_t const& cp_type, u32 count, alloc_t* allocator)
-    {
-        while ((cp_store->m_cap_size.get_offset() + count) > s_cp_store_capacities[cp_store->m_cap_size.get_index()])
-            cp_store->m_cap_size.set_index(cp_store->m_cap_size.get_index() + 1);
-
-        u32 const cap            = cp_store->m_cap_size.get_index();
-        u32 const size           = cp_store->m_cap_size.get_offset();
-        cp_store->m_cp_data      = (u8*)s_reallocate(cp_store->m_cp_data, size * cp_type.cp_sizeof, s_cp_store_capacities[cap] * cp_type.cp_sizeof, allocator);
-        cp_store->m_cp_data_used = (u8*)s_reallocate(cp_store->m_cp_data, size, s_cp_store_capacities[cap], allocator);
-    }
-
     static inline u8* s_cp_store_get_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 cp_offset)
     {
         u8* cp_data = cp_store->m_cp_data + (cp_type.cp_sizeof * cp_offset);
@@ -111,13 +100,32 @@ namespace xcore
 
     static u32 s_cp_store_alloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 count, alloc_t* allocator)
     {
-        // TODO: Implement
-        return 0;
+        if (cp_store->m_cp_data == nullptr)
+        {
+            cp_store->m_cap_size     = index_t(0, count);
+            cp_store->m_cp_data      = (u8*)allocator->allocate(count * cp_type.cp_sizeof);
+            cp_store->m_cp_data_used = (u8*)allocator->allocate((count + 7) / 8);
+            x_memset(cp_store->m_cp_data_used, 0, (count + 7) / 8);
+            return 0;
+        }
+        else
+        {
+            u32 const old_size       = cp_store->m_cap_size.get_offset();
+            u32 const new_size       = old_size + count;
+            cp_store->m_cap_size     = index_t(0, new_size);
+            cp_store->m_cp_data      = (u8*)s_reallocate(cp_store->m_cp_data, old_size * cp_type.cp_sizeof, new_size * cp_type.cp_sizeof, allocator);
+            cp_store->m_cp_data_used = (u8*)s_reallocate(cp_store->m_cp_data, (old_size + 7) / 8, (new_size + 7) / 8, allocator);
+            x_memset(cp_store->m_cp_data + (old_size + 7) / 8, 0, (count + 7) / 8);
+            return old_size;
+        }
     }
 
     static void s_cp_store_dealloc_cp(cp_store_t* cp_store, cp_type_t const& cp_type, u32 offset, u32 count)
     {
-        // TODO: Implement
+        // TODO: Tricky since we have no idea how to "remove" a slice out of the whole array without updating
+        // other slice owners about an update to their offset.
+        // One idea is to have a book keeping array that stores [entity type id, offset], we can then use that
+        // to identify which entity type ids need to be informed of an update of their offset.
         return;
     }
 

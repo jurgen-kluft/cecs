@@ -41,9 +41,9 @@ namespace xcore
     static entity_type_t* s_register_entity_type(entity_type_store_t* es, u32 max_entities, alloc_t* allocator)
     {
         u32 entity_type_id = 0;
-        if (g_hbb_find(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, entity_type_id))
+        if (g_hbb_find(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_id))
         {
-            g_hbb_clr(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, entity_type_id);
+            g_hbb_clr(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_id);
 
             entity_type_t* et = &es->m_entity_type_array[entity_type_id];
             et->m_type_id_and_size.set_index(entity_type_id);
@@ -53,10 +53,10 @@ namespace xcore
 
             for (s32 i = 0; i < components_store_t::COMPONENTS_MAX; ++i)
                 et->m_a_cp_store_offset[i] = -1;
-            for (s32 i = 0; i < max_entities; ++i)
+            for (u32 i = 0; i < max_entities; ++i)
                 et->m_entity_array[i] = 0;
-
             g_hbb_init(et->m_entity_hbb, max_entities, et->m_entity_hbb_config, 1, allocator);
+            return et;
         }
         return nullptr;
     }
@@ -76,9 +76,9 @@ namespace xcore
             return g_null_entity;
 
         u32 entity_id = 0;
-        if (g_hbb_find(et->m_entity_hbb, et->m_type_id_and_size.get_offset(), et->m_entity_hbb_config, entity_id))
+        if (g_hbb_find(et->m_entity_hbb, et->m_entity_hbb_config, et->m_type_id_and_size.get_offset(), entity_id))
         {
-            g_hbb_clr(et->m_entity_hbb, et->m_type_id_and_size.get_offset(), et->m_entity_hbb_config, entity_id);
+            g_hbb_clr(et->m_entity_hbb, et->m_entity_hbb_config, et->m_type_id_and_size.get_offset(), entity_id);
 
             u8&              eVER  = et->m_entity_array[entity_id];
             entity_type_id_t eTYPE = et->m_type_id_and_size.get_index();
@@ -88,16 +88,28 @@ namespace xcore
         return g_null_entity;
     }
 
-    static void s_delete_entity(entity_type_t* et, entity_t e)
+    static void s_delete_entity(components_store_t* cps, entity_type_t* et, entity_t e)
     {
         if (s_is_registered(et))
         {
             u32 const entity_id = g_entity_id(e);
-            if (!g_hbb_is_set(et->m_entity_hbb, et->m_type_id_and_size.get_offset(), et->m_entity_hbb_config, entity_id))
+            if (!g_hbb_is_set(et->m_entity_hbb, et->m_entity_hbb_config, et->m_type_id_and_size.get_offset(), entity_id))
             {
-                g_hbb_set(et->m_entity_hbb, et->m_type_id_and_size.get_offset(), et->m_entity_hbb_config, entity_id);
+                g_hbb_set(et->m_entity_hbb, et->m_entity_hbb_config, et->m_type_id_and_size.get_offset(), entity_id);
 
                 // NOTE: For all components for this entity type and mark them as unused for this entity
+
+                // Bruteforce (could there be a use for hbb here?)
+                // TODO: Add an hbb in entity_type to identify the components that are actually registered
+                for (s32 i = 0; i < components_store_t::COMPONENTS_MAX; ++i)
+                {
+                    if (et->m_a_cp_store_offset[i] == -1)
+                        continue;
+
+                    u32 const        cp_offset = et->m_a_cp_store_offset[i] + i;
+                    cp_type_t const* cp_type   = s_cp_get_cp_type(cps, i);
+                    s_components_set_cp_unused(cps, *cp_type, cp_offset);
+                }
             }
         }
     }
@@ -106,8 +118,8 @@ namespace xcore
     {
         if (s_is_registered(et))
         {
-            u32 const entity_type_id = es->m_entity_type_array->m_type_id_and_size.get_index();
-            g_hbb_set(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, entity_type_id);
+            u32 const entity_type_id = et->m_type_id_and_size.get_index();
+            g_hbb_set(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_id);
 
             allocator->deallocate(et->m_a_cp_store_offset);
             allocator->deallocate(et->m_entity_hbb);
@@ -121,13 +133,9 @@ namespace xcore
         for (s32 i = 0; i < entity_type_store_t::ENTITY_TYPE_MAX; ++i)
         {
             entity_type_t* et = &es->m_entity_type_array[i];
-            if (s_is_registered(et))
-            {
-                s_unregister_entity_type(es, et, allocator);
-            }
+            s_unregister_entity_type(es, et, allocator);
         }
         allocator->deallocate(es->m_entity_type_array);
-        g_hbb_release((hbb_t&)es->m_entity_type_hbb, allocator);
     }
 
 } // namespace xcore

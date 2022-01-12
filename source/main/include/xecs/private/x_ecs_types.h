@@ -50,8 +50,8 @@ namespace xcore
 
     // Entity Type, (8 + 8 + sizeof(u32)*max-number-of-components) ~4Kb
     // When an entity type registers a component it will allocate component data from the specific store for N entities
-    // and it will keep it there. Of course each entity can mark if it actually uses the component, but that can basically
-    // just be a single bit. So if only 50% of your entities of this type use this component you might be better of
+    // and it will keep it there. Of course each entity can mark if it actually uses the component, but that is
+    // just a single bit. So if only 50% of your entities of this type use this component you might be better of
     // registering another entity type.
     struct entity_type_t
     {
@@ -84,7 +84,7 @@ namespace xcore
     static inline s8 s_compute_index(u32 const bitset, u32 bit)
     {
         ASSERT((bit & bitset) == bit);
-        s16 const i = xcountBits(bitset & (bit - 1));
+        s8 const i = xcountBits(bitset & (bit - 1));
         return i;
     }
 

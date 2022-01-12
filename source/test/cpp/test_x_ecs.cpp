@@ -42,12 +42,16 @@ UNITTEST_SUITE_BEGIN(ecs)
         UNITTEST_TEST(create)
         {
             ecs2_t* ecs = g_ecs_create(context_t::system_alloc());
-
-            // entity_t e = g_create_entity(ecs);
-            // g_delete_entity(ecs, e);
-
             g_ecs_destroy(ecs);
         }
+
+		UNITTEST_TEST(register_entity_types)
+		{
+			ecs2_t* ecs = g_ecs_create(context_t::system_alloc());
+			entity_type_t const* ent0 = g_register_entity_type(ecs, 1024);
+			entity_type_t const* ent1 = g_register_entity_type(ecs, 2048);
+			g_ecs_destroy(ecs);
+		}
 
         UNITTEST_TEST(register_component_types)
         {
@@ -57,20 +61,23 @@ UNITTEST_SUITE_BEGIN(ecs)
             cp_type_t const* poscmp  = g_register_component_type<position_t>(ecs);
             cp_type_t const* velcmp  = g_register_component_type<velocity_t>(ecs);
 
-            entity_type_t const* ent0 = g_register_entity_type(ecs, 1024);
-
-            entity_t e = g_create_entity(ecs, ent0);
-            g_delete_entity(ecs, e);
-
             g_ecs_destroy(ecs);
         }
 
-        UNITTEST_TEST(create_entity)
+        UNITTEST_TEST(create_entities_in_one_entity_type)
         {
             ecs2_t* ecs = g_ecs_create(context_t::system_alloc());
 
-            // entity_t e = g_create_entity(ecs);
-            // g_delete_entity(ecs, e);
+			entity_type_t const* ent0 = g_register_entity_type(ecs, 1024);
+			entity_t e01 = g_create_entity(ecs, ent0);
+			entity_t e02 = g_create_entity(ecs, ent0);
+			entity_t e03 = g_create_entity(ecs, ent0);
+			entity_t e04 = g_create_entity(ecs, ent0);
+
+			g_delete_entity(ecs, e01);
+			g_delete_entity(ecs, e02);
+			g_delete_entity(ecs, e03);
+			g_delete_entity(ecs, e04);
 
             g_ecs_destroy(ecs);
         }
@@ -79,12 +86,15 @@ UNITTEST_SUITE_BEGIN(ecs)
         {
             ecs2_t* ecs = g_ecs_create(context_t::system_alloc());
 
-            // entity_t e = g_create_entity(ecs);
+			entity_type_t const* ent0 = g_register_entity_type(ecs, 1024);
+			entity_t e01 = g_create_entity(ecs, ent0);
 
-            // cp_type_t const* bytecmp = g_register_component_type<u8>(ecs);
-            // g_attach_component(ecs, e, bytecmp);
+            cp_type_t const* bytecmp = g_register_component_type<u8>(ecs);
+            g_attach_component(ecs, e01, bytecmp);
 
-            // g_delete_entity(ecs, e);
+			CHECK_TRUE(g_has_component(ecs, e01, bytecmp));
+
+            g_delete_entity(ecs, e01);
 
             g_ecs_destroy(ecs);
         }

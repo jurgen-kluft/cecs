@@ -97,6 +97,6 @@ namespace xcore
     {
         entity_type_id_t const type_id = g_entity_type_id(e);
         entity_type_t* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
-        s_delete_entity(entity_type, e);
+        s_delete_entity(&ecs->m_component_store, entity_type, e);
     }
 } // namespace xcore
