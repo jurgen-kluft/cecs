@@ -1,5 +1,5 @@
-#ifndef __XECS_ECS_TYPES_H__
-#define __XECS_ECS_TYPES_H__
+#ifndef __XECS_PRIVATE_ECS_TYPES_H__
+#define __XECS_PRIVATE_ECS_TYPES_H__
 #include "xbase/x_target.h"
 #ifdef USE_PRAGMA_ONCE
 #pragma once
@@ -11,6 +11,13 @@ namespace xcore
 {
     class alloc_t;
     struct cp_type_t;
+
+    // clang-format off
+    inline entity_ver_t     g_entity_version(entity_t e) { return ((u32)e & ECS_ENTITY_VERSION_MASK)>>ECS_ENTITY_VERSION_SHIFT; }
+    inline entity_type_id_t g_entity_type_id(entity_t e) { return ((u32)e & ECS_ENTITY_TYPE_MASK) >> ECS_ENTITY_TYPE_SHIFT; }
+    inline entity_id_t      g_entity_id(entity_t e)      { return (u32)e & ECS_ENTITY_ID_MASK; }
+    inline entity_t         g_make_entity(entity_ver_t ev, entity_type_id_t et, entity_id_t id) { return (u32)id | ((u32)et<<ECS_ENTITY_TYPE_SHIFT) | ((u32)ev<<ECS_ENTITY_VERSION_SHIFT); }
+    // clang-format on
 
     // [index:12-bit, offset:20-bit]
     struct index_t
@@ -53,7 +60,7 @@ namespace xcore
     // and it will keep it there. Of course each entity can mark if it actually uses the component, but that is
     // just a single bit. So if only 50% of your entities of this type use this component you might be better of
     // registering another entity type.
-    struct entity_type_t
+    struct en_type_t
     {
         index_t m_type_id_and_size;
         u32     m_entity_hbb_config;
@@ -71,7 +78,7 @@ namespace xcore
         };
 
         u32            m_entity_type_hbb[9];
-        entity_type_t* m_entity_type_array;
+        en_type_t* m_entity_type_array;
     };
 
     struct ecs2_t
@@ -123,4 +130,4 @@ namespace xcore
 
 } // namespace xcore
 
-#endif
+#endif // __XECS_PRIVATE_ECS_TYPES_H__

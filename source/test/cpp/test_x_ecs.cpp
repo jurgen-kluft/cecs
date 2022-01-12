@@ -48,8 +48,8 @@ UNITTEST_SUITE_BEGIN(ecs)
 		UNITTEST_TEST(register_entity_types)
 		{
 			ecs2_t* ecs = g_ecs_create(context_t::system_alloc());
-			entity_type_t const* ent0 = g_register_entity_type(ecs, 1024);
-			entity_type_t const* ent1 = g_register_entity_type(ecs, 2048);
+			en_type_t const* ent0 = g_register_entity_type(ecs, 1024);
+			en_type_t const* ent1 = g_register_entity_type(ecs, 2048);
 			g_ecs_destroy(ecs);
 		}
 
@@ -68,7 +68,7 @@ UNITTEST_SUITE_BEGIN(ecs)
         {
             ecs2_t* ecs = g_ecs_create(context_t::system_alloc());
 
-			entity_type_t const* ent0 = g_register_entity_type(ecs, 1024);
+			en_type_t const* ent0 = g_register_entity_type(ecs, 1024);
 			entity_t e01 = g_create_entity(ecs, ent0);
 			entity_t e02 = g_create_entity(ecs, ent0);
 			entity_t e03 = g_create_entity(ecs, ent0);
@@ -86,13 +86,13 @@ UNITTEST_SUITE_BEGIN(ecs)
         {
             ecs2_t* ecs = g_ecs_create(context_t::system_alloc());
 
-			entity_type_t const* ent0 = g_register_entity_type(ecs, 1024);
+			en_type_t const* ent0 = g_register_entity_type(ecs, 1024);
 			entity_t e01 = g_create_entity(ecs, ent0);
 
             cp_type_t const* bytecmp = g_register_component_type<u8>(ecs);
-            g_attach_component(ecs, e01, bytecmp);
+            g_set_cp(ecs, e01, bytecmp);
 
-			CHECK_TRUE(g_has_component(ecs, e01, bytecmp));
+			CHECK_TRUE(g_has_cp(ecs, e01, bytecmp));
 
             g_delete_entity(ecs, e01);
 

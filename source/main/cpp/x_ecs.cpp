@@ -33,7 +33,7 @@ namespace xcore
         allocator->deallocate(ecs);
     }
 
-    entity_type_t const* g_register_entity_type(ecs2_t* r, u32 max_entities) { return s_register_entity_type(&r->m_entity_type_store, max_entities, r->m_allocator); }
+    en_type_t const* g_register_entity_type(ecs2_t* r, u32 max_entities) { return s_register_entity_type(&r->m_entity_type_store, max_entities, r->m_allocator); }
     cp_type_t const* g_register_component_type(ecs2_t* r, u32 cp_sizeof, const char* cp_name) { return s_cp_register_cp_type(&r->m_component_store, cp_sizeof, cp_name); }
 
     // --------------------------------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ namespace xcore
     static bool s_entity_has_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp_type)
     {
         entity_type_id_t const type_id = g_entity_type_id(e);
-        entity_type_t const* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        en_type_t const* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
         u32 const cp_offset = s_get_component_data_offset(entity_type, cp_type.cp_id) + g_entity_id(e);
         return s_components_get_cp_used(&ecs->m_component_store, cp_type, cp_offset);
     }
@@ -50,15 +50,15 @@ namespace xcore
     static void* s_entity_get_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp_type)
     {
         entity_type_id_t const type_id = g_entity_type_id(e);
-        entity_type_t const* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        en_type_t const* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
         u32 const cp_offset = s_get_component_data_offset(entity_type, cp_type.cp_id) + g_entity_id(e);
         return s_components_get_cp_data(&ecs->m_component_store, cp_type, cp_offset);
     }
 
-    static void s_entity_attach_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp_type)
+    static void s_entity_set_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp_type)
     {
         entity_type_id_t const type_id = g_entity_type_id(e);
-        entity_type_t* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        en_type_t* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
         u32 cp_offset = s_get_component_data_offset(entity_type, cp_type.cp_id);
         if (cp_offset == 0xFFFFFFFF)
         {
@@ -71,10 +71,10 @@ namespace xcore
     }
 
     // Remove/detach component from the entity
-    static void s_entity_detach_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp_type)
+    static void s_entity_rem_component(ecs2_t* ecs, entity_t e, cp_type_t const& cp_type)
     {
         entity_type_id_t const type_id = g_entity_type_id(e);
-        entity_type_t* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        en_type_t* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
         u32 cp_offset = s_get_component_data_offset(entity_type, cp_type.cp_id);
         if (cp_offset == 0xFFFFFFFF)
             return;
@@ -83,12 +83,12 @@ namespace xcore
         s_components_set_cp_unused(&ecs->m_component_store, cp_type, cp_offset);
     }
 
-    bool  g_has_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { return s_entity_has_component(ecs, entity, *cp_type); }
-    void  g_attach_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { s_entity_attach_component(ecs, entity, *cp_type); }
-    void  g_dettach_component(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { s_entity_detach_component(ecs, entity, *cp_type); }
-    void* g_get_component_data(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { return s_entity_get_component(ecs, entity, *cp_type); }
+    bool  g_has_cp(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { return s_entity_has_component(ecs, entity, *cp_type); }
+    void  g_set_cp(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { s_entity_set_component(ecs, entity, *cp_type); }
+    void  g_rem_cp(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { s_entity_rem_component(ecs, entity, *cp_type); }
+    void* g_get_cp(ecs2_t* ecs, entity_t entity, cp_type_t const* cp_type) { return s_entity_get_component(ecs, entity, *cp_type); }
 
-    entity_t g_create_entity(ecs2_t* es, entity_type_t const* et)
+    entity_t g_create_entity(ecs2_t* es, en_type_t const* et)
     {
         return s_create_entity(et);
     }
@@ -96,7 +96,7 @@ namespace xcore
     void g_delete_entity(ecs2_t* ecs, entity_t e)
     {
         entity_type_id_t const type_id = g_entity_type_id(e);
-        entity_type_t* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        en_type_t* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
         s_delete_entity(&ecs->m_component_store, entity_type, e);
     }
 } // namespace xcore
