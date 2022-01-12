@@ -84,7 +84,7 @@ namespace xcore
         en_type_t* m_entity_type_array;
     };
 
-    struct ecs2_t
+    struct ecs_t
     {
         alloc_t*        m_allocator;
         cp_store_mgr_t  m_component_store;

@@ -14,7 +14,7 @@ namespace xcore
     //   - 8 bit for the type(256), so in total you could have 16 million entities
     //   - 8 bit for the version(resets in[0 - 255]).
 
-    struct ecs2_t;
+    struct ecs_t;
 
     // clang-format off
     typedef u32 entity_t;
