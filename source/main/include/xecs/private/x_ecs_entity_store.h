@@ -23,35 +23,35 @@ namespace xcore
 
     static inline bool s_is_registered(en_type_t const* et) { return !et->m_type_id_and_size.is_null(); }
 
-    static void s_init(entity_type_store_t* es, alloc_t* allocator)
+    static void s_init(en_type_store_t* es, alloc_t* allocator)
     {
-        g_hbb_init(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, 1);
-        es->m_entity_type_array = (en_type_t*)allocator->allocate(sizeof(en_type_t) * (entity_type_store_t::ENTITY_TYPE_MAX));
-        for (s32 i = 0; i < entity_type_store_t::ENTITY_TYPE_MAX; ++i)
+        g_hbb_init(es->m_entity_type_hbb, en_type_store_t::ENTITY_TYPE_MAX, en_type_store_t::ENTITY_TYPE_HBB_CONFIG, 1);
+        es->m_entity_type_array = (en_type_t*)allocator->allocate(sizeof(en_type_t) * (en_type_store_t::ENTITY_TYPE_MAX));
+        for (s32 i = 0; i < en_type_store_t::ENTITY_TYPE_MAX; ++i)
         {
             s_clear(&es->m_entity_type_array[i]);
         }
     }
 
-    static en_type_t* s_get_entity_type(entity_type_store_t* es, u32 entity_type_id) { return &es->m_entity_type_array[entity_type_id]; }
-    static bool           s_has_component(en_type_t const* es, u32 cp_id) { return es->m_a_cp_store_offset[cp_id] != -1; }
-    static u32            s_get_component_data_offset(en_type_t const* es, u32 cp_id) { return es->m_a_cp_store_offset[cp_id]; }
-    static void           s_set_component_data_offset(en_type_t* es, u32 cp_id, u32 cp_offset) { es->m_a_cp_store_offset[cp_id] = cp_offset; }
+    static en_type_t* s_get_entity_type(en_type_store_t* es, u32 entity_type_id) { return &es->m_entity_type_array[entity_type_id]; }
+    static bool       s_has_component(en_type_t const* es, u32 cp_id) { return es->m_a_cp_store_offset[cp_id] != -1; }
+    static u32        s_get_component_data_offset(en_type_t const* es, u32 cp_id) { return es->m_a_cp_store_offset[cp_id]; }
+    static void       s_set_component_data_offset(en_type_t* es, u32 cp_id, u32 cp_offset) { es->m_a_cp_store_offset[cp_id] = cp_offset; }
 
-    static en_type_t* s_register_entity_type(entity_type_store_t* es, u32 max_entities, alloc_t* allocator)
+    static en_type_t* s_register_entity_type(en_type_store_t* es, u32 max_entities, alloc_t* allocator)
     {
         u32 entity_type_id = 0;
-        if (g_hbb_find(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_id))
+        if (g_hbb_find(es->m_entity_type_hbb, en_type_store_t::ENTITY_TYPE_HBB_CONFIG, en_type_store_t::ENTITY_TYPE_MAX, entity_type_id))
         {
-            g_hbb_clr(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_id);
+            g_hbb_clr(es->m_entity_type_hbb, en_type_store_t::ENTITY_TYPE_HBB_CONFIG, en_type_store_t::ENTITY_TYPE_MAX, entity_type_id);
 
             en_type_t* et = &es->m_entity_type_array[entity_type_id];
             et->m_type_id_and_size.set_index(entity_type_id);
             et->m_type_id_and_size.set_offset(max_entities);
-            et->m_a_cp_store_offset = (u32*)allocator->allocate(sizeof(u32) * components_store_t::COMPONENTS_MAX);
+            et->m_a_cp_store_offset = (u32*)allocator->allocate(sizeof(u32) * cp_store_mgr_t::COMPONENTS_MAX);
             et->m_entity_array      = (u8*)allocator->allocate(sizeof(u8) * max_entities);
 
-            for (s32 i = 0; i < components_store_t::COMPONENTS_MAX; ++i)
+            for (s32 i = 0; i < cp_store_mgr_t::COMPONENTS_MAX; ++i)
                 et->m_a_cp_store_offset[i] = -1;
             for (u32 i = 0; i < max_entities; ++i)
                 et->m_entity_array[i] = 0;
@@ -88,7 +88,7 @@ namespace xcore
         return g_null_entity;
     }
 
-    static void s_delete_entity(components_store_t* cps, en_type_t* et, entity_t e)
+    static void s_delete_entity(cp_store_mgr_t* cps, en_type_t* et, entity_t e)
     {
         if (s_is_registered(et))
         {
@@ -101,7 +101,7 @@ namespace xcore
 
                 // Bruteforce (could there be a use for hbb here?)
                 // TODO: Add an hbb in entity_type to identify the components that are actually registered
-                for (s32 i = 0; i < components_store_t::COMPONENTS_MAX; ++i)
+                for (s32 i = 0; i < cp_store_mgr_t::COMPONENTS_MAX; ++i)
                 {
                     if (et->m_a_cp_store_offset[i] == -1)
                         continue;
@@ -114,12 +114,12 @@ namespace xcore
         }
     }
 
-    static void s_unregister_entity_type(entity_type_store_t* es, en_type_t const* et, alloc_t* allocator)
+    static void s_unregister_entity_type(en_type_store_t* es, en_type_t const* et, alloc_t* allocator)
     {
         if (s_is_registered(et))
         {
             u32 const entity_type_id = et->m_type_id_and_size.get_index();
-            g_hbb_set(es->m_entity_type_hbb, entity_type_store_t::ENTITY_TYPE_HBB_CONFIG, entity_type_store_t::ENTITY_TYPE_MAX, entity_type_id);
+            g_hbb_set(es->m_entity_type_hbb, en_type_store_t::ENTITY_TYPE_HBB_CONFIG, en_type_store_t::ENTITY_TYPE_MAX, entity_type_id);
 
             allocator->deallocate(et->m_a_cp_store_offset);
             allocator->deallocate(et->m_entity_hbb);
@@ -128,9 +128,9 @@ namespace xcore
         }
     }
 
-    static void s_exit(entity_type_store_t* es, alloc_t* allocator)
+    static void s_exit(en_type_store_t* es, alloc_t* allocator)
     {
-        for (s32 i = 0; i < entity_type_store_t::ENTITY_TYPE_MAX; ++i)
+        for (s32 i = 0; i < en_type_store_t::ENTITY_TYPE_MAX; ++i)
         {
             en_type_t* et = &es->m_entity_type_array[i];
             s_unregister_entity_type(es, et, allocator);

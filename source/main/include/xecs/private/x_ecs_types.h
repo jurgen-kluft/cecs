@@ -43,7 +43,7 @@ namespace xcore
         index_t m_cap_size;
     };
 
-    struct components_store_t
+    struct cp_store_mgr_t
     {
         enum
         {
@@ -64,12 +64,15 @@ namespace xcore
     {
         index_t m_type_id_and_size;
         u32     m_entity_hbb_config;
+        hbb_t*  m_a_cp_hbb;          // TODO: Every used component has a hbb (for easy iteration)
         u32*    m_a_cp_store_offset; // Could be u24[], the components allocated start at a certain offset for each cp_store
-        hbb_t   m_entity_hbb;
-        u8*     m_entity_array; // Just versions
+        u32     m_tg_hbb[33];        // TODO: Which tag is registered
+        hbb_t*  m_a_tg_hbb;          // TODO: Every registered tag has a hbb (for easy iteration)
+        hbb_t   m_entity_hbb;        // Which entity is still free
+        u8*     m_entity_array;      // Just versions
     };
 
-    struct entity_type_store_t
+    struct en_type_store_t
     {
         enum
         {
@@ -77,15 +80,15 @@ namespace xcore
             ENTITY_TYPE_HBB_CONFIG = (8 << 5) | 2, // 256 maxbits
         };
 
-        u32            m_entity_type_hbb[9];
+        u32        m_entity_type_hbb[9];
         en_type_t* m_entity_type_array;
     };
 
     struct ecs2_t
     {
-        alloc_t*            m_allocator;
-        components_store_t  m_component_store;
-        entity_type_store_t m_entity_type_store;
+        alloc_t*        m_allocator;
+        cp_store_mgr_t  m_component_store;
+        en_type_store_t m_entity_type_store;
     };
 
     static inline s8 s_compute_index(u32 const bitset, u32 bit)
