@@ -82,7 +82,7 @@ UNITTEST_SUITE_BEGIN(ecs)
             g_ecs_destroy(ecs);
         }
 
-        UNITTEST_TEST(create_entity_and_attach_component)
+        UNITTEST_TEST(create_entity_and_set_component)
         {
             ecs2_t* ecs = g_ecs_create(context_t::system_alloc());
 
@@ -93,6 +93,25 @@ UNITTEST_SUITE_BEGIN(ecs)
             g_set_cp(ecs, e01, bytecmp);
 
 			CHECK_TRUE(g_has_cp(ecs, e01, bytecmp));
+
+            g_delete_entity(ecs, e01);
+
+            g_ecs_destroy(ecs);
+        }
+
+        struct enemy_tag_t {};
+
+        UNITTEST_TEST(create_entity_and_set_tag)
+        {
+            ecs2_t* ecs = g_ecs_create(context_t::system_alloc());
+
+			en_type_t const* ent0 = g_register_entity_type(ecs, 1024);
+			entity_t e01 = g_create_entity(ecs, ent0);
+
+            tg_type_t const* enemy = g_register_tag_type<enemy_tag_t>(ecs);
+            g_set_tag(ecs, e01, enemy);
+
+			CHECK_TRUE(g_has_tag(ecs, e01, enemy));
 
             g_delete_entity(ecs, e01);
 
