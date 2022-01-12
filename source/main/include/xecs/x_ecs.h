@@ -16,9 +16,9 @@ namespace xcore
 
     // clang-format off
     typedef u32 entity_t;
-    typedef u32 entity_ver_t;
+    typedef u16 entity_ver_t;
     typedef u32 entity_id_t;
-    typedef u32 entity_type_id_t;
+    typedef u16 entity_type_id_t;
 
     #define ECS_ENTITY_ID_MASK       ((u32)0x0000FFFF)   // Mask to use to get the entity number out of an identifier
     #define ECS_ENTITY_TYPE_MASK     ((u32)0x00FF0000)   // Mask to use to get the entity type out of an identifier
@@ -30,7 +30,7 @@ namespace xcore
     inline entity_ver_t     g_entity_version(entity_t e)                        { return ((u32)e & ECS_ENTITY_VERSION_MASK)>>ECS_ENTITY_VERSION_SHIFT; }
     inline entity_type_id_t g_entity_type_id(entity_t e)                        { return ((u32)e & ECS_ENTITY_TYPE_MASK) >> ECS_ENTITY_TYPE_SHIFT; }
     inline entity_id_t      g_entity_id(entity_t e)                             { return (u32)e & ECS_ENTITY_ID_MASK; }
-    inline entity_t         g_make_entity(entity_type_id_t et, entity_id_t id, entity_ver_t ev) { return (u32)id | (et<<ECS_ENTITY_TYPE_SHIFT) | (ev<<ECS_ENTITY_VERSION_SHIFT); }
+    inline entity_t         g_make_entity(entity_ver_t ev, entity_type_id_t et, entity_id_t id) { return (u32)id | ((u32)et<<ECS_ENTITY_TYPE_SHIFT) | ((u32)ev<<ECS_ENTITY_VERSION_SHIFT); }
 
     extern const entity_t g_null_entity;
     // clang-format on

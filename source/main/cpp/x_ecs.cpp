@@ -62,7 +62,7 @@ namespace xcore
         u32 cp_offset = s_get_component_data_offset(entity_type, cp_type.cp_id);
         if (cp_offset == 0xFFFFFFFF)
         {
-            cp_offset = s_components_alloc(&ecs->m_component_store, &cp_type, entity_type->m_max_num_entities, ecs->m_allocator);
+            cp_offset = s_components_alloc(&ecs->m_component_store, &cp_type, entity_type->m_max_num_entities.get_offset(), ecs->m_allocator);
             s_set_component_data_offset(entity_type, cp_type.cp_id, cp_offset);
         }
         // Now set the mark for this entity that he has attached this component
@@ -90,13 +90,13 @@ namespace xcore
 
     entity_t g_create_entity(ecs2_t* es, entity_type_t const* et)
     {
-        // TODO
-        return 0;
+        return s_create_entity(et);
     }
 
-    void g_delete_entity(ecs2_t* ecs, entity_t entity)
+    void g_delete_entity(ecs2_t* ecs, entity_t e)
     {
-        // TODO
-        return;
+        entity_type_id_t const type_id = g_entity_type_id(e);
+        entity_type_t* entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        s_delete_entity(entity_type, e);
     }
 } // namespace xcore
