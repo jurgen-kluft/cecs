@@ -16,7 +16,7 @@ namespace xcore
     // --------------------------------------------------------------------------------------------------------
     // entity component system, create and destroy
 
-    ecs_t* g_ecs_create(alloc_t* allocator)
+    ecs_t* g_create_ecs(alloc_t* allocator)
     {
         ecs_t* ecs       = (ecs_t*)allocator->allocate(sizeof(ecs_t));
         ecs->m_allocator = allocator;
@@ -25,7 +25,7 @@ namespace xcore
         return ecs;
     }
 
-    void g_ecs_destroy(ecs_t* ecs)
+    void g_destroy_ecs(ecs_t* ecs)
     {
         alloc_t* allocator = ecs->m_allocator;
         s_exit(&ecs->m_entity_type_store, allocator);
@@ -35,6 +35,7 @@ namespace xcore
 
     en_type_t const* g_register_entity_type(ecs_t* r, u32 max_entities) { return s_register_entity_type(&r->m_entity_type_store, max_entities, r->m_allocator); }
     cp_type_t const* g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cp_name) { return s_cp_register_cp_type(&r->m_component_store, cp_sizeof, cp_name); }
+    tg_type_t const* g_register_tag_type(ecs_t* r, const char* cp_name) { return s_cp_register_tag_type(&r->m_component_store, cp_name); }
 
     // --------------------------------------------------------------------------------------------------------
     // entity functionality

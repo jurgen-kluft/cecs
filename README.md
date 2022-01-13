@@ -16,11 +16,13 @@ entity_t e = g_create_entity(ecs, en_type_go);
 g_delete_entity(ecs, e);
 
 // Components
-
 struct position_t
 {
     float x,y,z;
 };
+
+// You can give a name to a component like this (will be visible in cp_type_t)
+template <> inline const char* nameof<position_t>() { return "position"; }
 
 cp_type_t* poscp = g_register_component_type<position_t>(ecs);
 
@@ -36,6 +38,9 @@ if (g_has_cp(ecs, e, poscp))
 // Tags (1 bit per entity)
 
 struct alerted_t{};
+
+// You can give a name to a tag like this (will be visible in tg_type_t)
+template <> inline const char* nameof<alerted_t>() { return "alerted"; }
 
 tg_type_t* alerted = g_register_tag_type<marked_t>(ecs);
 

@@ -38,19 +38,19 @@ namespace xcore
 
     struct cp_store_t
     {
-        u8*     m_cp_data;
-        u8*     m_cp_data_used;
-        index_t m_cap_size;
+        u8* m_cp_data; // We could merge the 2 pointers into one piece of memory where the 1st block is the 'bits' and the 2nd block the cp data
+        u8* m_cp_data_used; // Removing this saves 8Kb for ecs_t
+        u32 m_size;  // The number of components allocated
+        u32 m_types; // How many types have requested a chunk
     };
 
     struct cp_store_mgr_t
     {
         enum
         {
-            COMPONENTS_MAX             = 1024,
-            COMPONENTS_TYPE_HBB_CONFIG = 2, // 1024 maxbits
+            COMPONENTS_MAX = 1024,
         };
-        u32         m_a_cp_hbb[33]; // To identify which component stores are still free (to give out new component id)
+        u32         m_a_cp_hbb[36]; // To identify which component stores are still free (to give out new component id)
         cp_type_t*  m_a_cp_type;    // The type information attached to each store
         cp_store_t* m_a_cp_store;   // N max number of components
     };
@@ -66,7 +66,7 @@ namespace xcore
         u32     m_entity_hbb_config;
         hbb_t*  m_a_cp_hbb;          // TODO: Every used component has a hbb (for easy iteration)
         u32*    m_a_cp_store_offset; // Could be u24[], the components allocated start at a certain offset for each cp_store
-        u32     m_tg_hbb[33];        // TODO: Which tag is registered
+        u32     m_tg_hbb[36];        // TODO: Which tag is registered
         hbb_t*  m_a_tg_hbb;          // TODO: Every registered tag has a hbb (for easy iteration)
         hbb_t   m_entity_hbb;        // Which entity is still free
         u8*     m_entity_array;      // Just versions
@@ -76,11 +76,10 @@ namespace xcore
     {
         enum
         {
-            ENTITY_TYPE_MAX        = 256,          // (related to ECS_ENTITY_TYPE_MASK)
-            ENTITY_TYPE_HBB_CONFIG = (8 << 5) | 2, // 256 maxbits
+            ENTITY_TYPE_MAX = 256, // (related to ECS_ENTITY_TYPE_MASK)
         };
 
-        u32        m_entity_type_hbb[9];
+        u32        m_entity_type_hbb[12];
         en_type_t* m_entity_type_array;
     };
 
