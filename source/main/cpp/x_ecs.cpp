@@ -33,37 +33,39 @@ namespace xcore
         allocator->deallocate(ecs);
     }
 
+    static tg_type_t const* s_cp_register_tag_type(tag_store_mgr_t* store, const char* name) { return nullptr; }
+
     en_type_t const* g_register_entity_type(ecs_t* r, u32 max_entities) { return s_register_entity_type(&r->m_entity_type_store, max_entities, r->m_allocator); }
     cp_type_t const* g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cp_name) { return s_cp_register_cp_type(&r->m_component_store, cp_sizeof, cp_name); }
-    tg_type_t const* g_register_tag_type(ecs_t* r, const char* cp_name) { return s_cp_register_tag_type(&r->m_component_store, cp_name); }
+    tg_type_t const* g_register_tag_type(ecs_t* r, const char* tg_name) { return s_cp_register_tag_type(&r->m_tag_store, tg_name); }
 
     // --------------------------------------------------------------------------------------------------------
     // entity functionality
 
     static bool s_entity_has_component(ecs_t* ecs, entity_t e, cp_type_t const& cp_type)
     {
-        entity_type_id_t const type_id     = g_entity_type_id(e);
-        en_type_t const*       entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        entity_type_id_t const en_type_id  = g_entity_type_id(e);
+        en_type_t const*       entity_type = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
         u32 const              cp_offset   = s_get_component_data_offset(entity_type, cp_type.cp_id) + g_entity_id(e);
         return s_components_get_cp_used(&ecs->m_component_store, cp_type, cp_offset);
     }
 
     static void* s_entity_get_component(ecs_t* ecs, entity_t e, cp_type_t const& cp_type)
     {
-        entity_type_id_t const type_id     = g_entity_type_id(e);
-        en_type_t const*       entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        entity_type_id_t const en_type_id  = g_entity_type_id(e);
+        en_type_t const*       entity_type = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
         u32 const              cp_offset   = s_get_component_data_offset(entity_type, cp_type.cp_id) + g_entity_id(e);
         return s_components_get_cp_data(&ecs->m_component_store, cp_type, cp_offset);
     }
 
     static void s_entity_set_component(ecs_t* ecs, entity_t e, cp_type_t const& cp_type)
     {
-        entity_type_id_t const type_id     = g_entity_type_id(e);
-        en_type_t*             entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        entity_type_id_t const en_type_id  = g_entity_type_id(e);
+        en_type_t*             entity_type = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
         u32                    cp_offset   = s_get_component_data_offset(entity_type, cp_type.cp_id);
         if (cp_offset == 0xFFFFFFFF)
         {
-            cp_offset = s_components_alloc(&ecs->m_component_store, &cp_type, entity_type->m_type_id_and_size.get_offset(), ecs->m_allocator);
+            cp_offset = s_components_alloc(&ecs->m_component_store, &cp_type, en_type_id, entity_type->m_type_id_and_size.get_offset(), ecs->m_allocator);
             s_set_component_data_offset(entity_type, cp_type.cp_id, cp_offset);
         }
         // Now set the mark for this entity that he has attached this component
@@ -74,8 +76,8 @@ namespace xcore
     // Remove/detach component from the entity
     static void s_entity_rem_component(ecs_t* ecs, entity_t e, cp_type_t const& cp_type)
     {
-        entity_type_id_t const type_id     = g_entity_type_id(e);
-        en_type_t*             entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        entity_type_id_t const en_type_id  = g_entity_type_id(e);
+        en_type_t*             entity_type = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
         u32                    cp_offset   = s_get_component_data_offset(entity_type, cp_type.cp_id);
         if (cp_offset == 0xFFFFFFFF)
             return;
@@ -88,8 +90,8 @@ namespace xcore
 
     void g_delete_entity(ecs_t* ecs, entity_t e)
     {
-        entity_type_id_t const type_id     = g_entity_type_id(e);
-        en_type_t*             entity_type = s_get_entity_type(&ecs->m_entity_type_store, type_id);
+        entity_type_id_t const en_type_id  = g_entity_type_id(e);
+        en_type_t*             entity_type = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
         s_delete_entity(&ecs->m_component_store, entity_type, e);
     }
 

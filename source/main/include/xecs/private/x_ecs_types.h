@@ -38,10 +38,15 @@ namespace xcore
 
     struct cp_store_t
     {
-        u8* m_cp_data; // We could merge the 2 pointers into one piece of memory where the 1st block is the 'bits' and the 2nd block the cp data
-        u8* m_cp_data_used; // Removing this saves 8Kb for ecs_t
-        u32 m_size;  // The number of components allocated
-        u32 m_types; // How many types have requested a chunk
+        u8*  m_cp_data;
+        u64* m_cp_data_used;
+        u32  m_size;  // The number of components allocated
+        u32  m_types; // Number of types that have an allocation
+
+        // u16 m_type_ids[];             // Aligned to 4
+        // u32 m_type_data_offsets[];    // Aligned to 2, the data offset of each type in the component data
+        // u8  m_component_used[];       // Aligned to 8
+        // u8  m_component_data[];       // Aligned to 8
     };
 
     struct cp_store_mgr_t
@@ -50,10 +55,25 @@ namespace xcore
         {
             COMPONENTS_MAX = 1024,
         };
-        u32         m_a_cp_hbb[36]; // To identify which component stores are still free (to give out new component id)
-        cp_type_t*  m_a_cp_type;    // The type information attached to each store
-        cp_store_t* m_a_cp_store;   // N max number of components
+        u32          m_a_cp_hbb[35]; // To identify which component stores are still free (to give out new component id)
+        cp_type_t*   m_a_cp_type;    // The type information attached to each store
+        cp_store_t** m_a_cp_store;   // N max number of components (1024 * 8 = 8192 bytes)
     };
+
+	struct tg_store_t
+	{
+	};
+
+	struct tag_store_mgr_t
+	{
+		enum
+		{
+			TAGS_MAX = 256,
+		};
+		u32          m_a_tg_hbb[35]; // To identify which component stores are still free (to give out new component id)
+		tg_type_t*   m_a_tg_type;    // The type information attached to each store
+		tg_store_t** m_a_tg_store;   // N max number of components (1024 * 8 = 8192 bytes)
+	};
 
     // Entity Type, (8 + 8 + sizeof(u32)*max-number-of-components) ~4Kb
     // When an entity type registers a component it will allocate component data from the specific store for N entities
@@ -66,7 +86,7 @@ namespace xcore
         u32     m_entity_hbb_config;
         hbb_t*  m_a_cp_hbb;          // TODO: Every used component has a hbb (for easy iteration)
         u32*    m_a_cp_store_offset; // Could be u24[], the components allocated start at a certain offset for each cp_store
-        u32     m_tg_hbb[36];        // TODO: Which tag is registered
+        u32     m_tg_hbb[35];        // TODO: Which tag is registered
         hbb_t*  m_a_tg_hbb;          // TODO: Every registered tag has a hbb (for easy iteration)
         hbb_t   m_entity_hbb;        // Which entity is still free
         u8*     m_entity_array;      // Just versions
@@ -79,7 +99,7 @@ namespace xcore
             ENTITY_TYPE_MAX = 256, // (related to ECS_ENTITY_TYPE_MASK)
         };
 
-        u32        m_entity_type_hbb[12];
+        u32        m_entity_type_hbb[11];
         en_type_t* m_entity_type_array;
     };
 
@@ -87,6 +107,7 @@ namespace xcore
     {
         alloc_t*        m_allocator;
         cp_store_mgr_t  m_component_store;
+		tag_store_mgr_t m_tag_store;
         en_type_store_t m_entity_type_store;
     };
 
