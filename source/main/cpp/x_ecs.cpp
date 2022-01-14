@@ -36,7 +36,7 @@ namespace xcore
     static tg_type_t const* s_cp_register_tag_type(tag_store_mgr_t* store, const char* name) { return nullptr; }
 
     en_type_t const* g_register_entity_type(ecs_t* r, u32 max_entities) { return s_register_entity_type(&r->m_entity_type_store, max_entities, r->m_allocator); }
-    cp_type_t const* g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cp_name) { return s_cp_register_cp_type(&r->m_component_store, cp_sizeof, cp_name); }
+    cp_type_t const* g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cp_name) { return s_register_cp_type(&r->m_component_store, cp_sizeof, cp_name); }
     tg_type_t const* g_register_tag_type(ecs_t* r, const char* tg_name) { return s_cp_register_tag_type(&r->m_tag_store, tg_name); }
 
     // --------------------------------------------------------------------------------------------------------

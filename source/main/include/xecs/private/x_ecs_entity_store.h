@@ -107,7 +107,7 @@ namespace xcore
                         continue;
 
                     u32 const        cp_offset = et->m_a_cp_store_offset[i] + i;
-                    cp_type_t const* cp_type   = s_cp_get_cp_type(cps, i);
+                    cp_type_t const* cp_type   = s_get_cp_type(cps, i);
                     s_components_set_cp_unused(cps, *cp_type, cp_offset);
                 }
             }
