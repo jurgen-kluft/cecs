@@ -60,20 +60,16 @@ namespace xcore
         cp_store_t** m_a_cp_store;   // N max number of components (1024 * 8 = 8192 bytes)
     };
 
-	struct tg_store_t
-	{
-	};
-
-	struct tag_store_mgr_t
-	{
-		enum
-		{
-			TAGS_MAX = 256,
-		};
-		u32          m_a_tg_hbb[35]; // To identify which component stores are still free (to give out new component id)
-		tg_type_t*   m_a_tg_type;    // The type information attached to each store
-		tg_store_t** m_a_tg_store;   // N max number of components (1024 * 8 = 8192 bytes)
-	};
+    struct tag_store_mgr_t
+    {
+        enum
+        {
+            TAGS_MAX = 256,
+        };
+        u32          m_a_tg_hbb[35]; // To identify which component stores are still free (to give out new component id)
+        tg_type_t*   m_a_tg_type;    // The type information attached to each tag store
+        hbb_t*       m_a_tg_store;   // Each tag store is nothing more than a hbb_t
+    };
 
     // Entity Type, (8 + 8 + sizeof(u32)*max-number-of-components) ~4Kb
     // When an entity type registers a component it will allocate component data from the specific store for N entities
@@ -107,7 +103,7 @@ namespace xcore
     {
         alloc_t*        m_allocator;
         cp_store_mgr_t  m_component_store;
-		tag_store_mgr_t m_tag_store;
+        tag_store_mgr_t m_tag_store;
         en_type_store_t m_entity_type_store;
     };
 
