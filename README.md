@@ -1,6 +1,14 @@
 # xecs library
 
-A entity component system:
+A entity component system with the following design decisions:
+
+- Component Types should not rely on template magic
+- Tag Types should not rely on template magic
+- Iteration should be straightforward and not rely on template magic
+- User should be able to have some control over the organization/grouping of entities and components
+- Component data for each entity type is in one array and NOT in a global array for that specific component type
+- Component data for each entity should be in forward order as we iterate over entities and their components
+- Tags should really be just one bit
 
 ```c++
 

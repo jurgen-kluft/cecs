@@ -95,7 +95,6 @@ UNITTEST_SUITE_BEGIN(ecs)
             CHECK_TRUE(g_has_cp(ecs, e01, bytecmp));
 
             g_delete_entity(ecs, e01);
-
             g_destroy_ecs(ecs);
         }
 
@@ -115,8 +114,9 @@ UNITTEST_SUITE_BEGIN(ecs)
 
             CHECK_TRUE(g_has_tag(ecs, e01, enemy));
 
-            g_delete_entity(ecs, e01);
+            g_rem_tag(ecs, e01, enemy);
 
+            g_delete_entity(ecs, e01);
             g_destroy_ecs(ecs);
         }
     }
