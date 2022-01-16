@@ -87,7 +87,8 @@ namespace xcore
         u8**    m_a_cp_store;       // 8192 bytes
         u32     m_tg_hbb[7];        // 28 bytes, which tag is registered by the entity type (max 128)
         hbb_t*  m_a_tg_hbb;         // 8 bytes, every registered tag has a hbb
-        hbb_t   m_entity_hbb;       // 8 bytes, which entity is still free
+        hbb_t   m_entity_free_hbb;  // 8 bytes, which entity is free
+        hbb_t   m_entity_used_hbb;  // 8 bytes, which entity is used
         u8*     m_a_entity;         // 8 bytes, just versions
     };
 
@@ -265,7 +266,8 @@ namespace xcore
         et->m_a_cp_store_hbb   = nullptr;
         et->m_a_cp_store       = nullptr;
         et->m_a_tg_hbb         = nullptr;
-        et->m_entity_hbb       = nullptr;
+        et->m_entity_free_hbb  = nullptr;
+        et->m_entity_used_hbb  = nullptr;
         et->m_a_entity         = nullptr;
         g_hbb_init(et->m_cp_hbb, 1024, 0);
         g_hbb_init(et->m_tg_hbb, 128, 0);
@@ -322,7 +324,8 @@ namespace xcore
                 et->m_a_entity[i] = 0;
             }
 
-            g_hbb_init(et->m_entity_hbb, max_entities, 1, allocator);
+            g_hbb_init(et->m_entity_free_hbb, max_entities, 1, allocator);
+            g_hbb_init(et->m_entity_used_hbb, max_entities, 0, allocator);
 
             return et;
         }
@@ -334,9 +337,10 @@ namespace xcore
         if (s_is_registered(et))
         {
             u32 entity_id = 0;
-            if (g_hbb_find(et->m_entity_hbb, entity_id))
+            if (g_hbb_find(et->m_entity_free_hbb, entity_id))
             {
-                g_hbb_clr(et->m_entity_hbb, entity_id);
+                g_hbb_clr(et->m_entity_free_hbb, entity_id);
+                g_hbb_set(et->m_entity_used_hbb, entity_id);
 
                 u8&              eVER  = et->m_a_entity[entity_id];
                 entity_type_id_t eTYPE = et->m_type_id_and_size.get_index();
@@ -352,9 +356,10 @@ namespace xcore
         if (s_is_registered(et))
         {
             u32 const entity_id = g_entity_id(e);
-            if (!g_hbb_is_set(et->m_entity_hbb, entity_id))
+            if (!g_hbb_is_set(et->m_entity_free_hbb, entity_id))
             {
-                g_hbb_set(et->m_entity_hbb, entity_id);
+                g_hbb_set(et->m_entity_free_hbb, entity_id);
+                g_hbb_clr(et->m_entity_used_hbb, entity_id);
 
                 // NOTE: For all components for this entity type and mark them as unused for this entity
 
@@ -404,7 +409,8 @@ namespace xcore
             allocator->deallocate(et->m_a_tg_hbb);
             allocator->deallocate(et->m_a_entity);
 
-            g_hbb_release((hbb_t&)et->m_entity_hbb, allocator);
+            g_hbb_release((hbb_t&)et->m_entity_free_hbb, allocator);
+            g_hbb_release((hbb_t&)et->m_entity_used_hbb, allocator);
 
             s_clear(et);
             allocator->deallocate(et);
@@ -582,10 +588,25 @@ namespace xcore
         m_tg_type_cnt = 0;
     }
 
-
     // Mark the things you want to iterate on
     void en_iterator_t::cp_type(cp_type_t* cp) { m_cp_type_arr[m_cp_type_cnt++] = (u16)cp->cp_id; }
     void en_iterator_t::tg_type(tg_type_t* tg) { m_tg_type_arr[m_tg_type_cnt++] = (u8)tg->tg_id; }
+
+    static inline u32 s_first_entity(en_iterator_t& iter)
+    {
+        u32 index;
+        if (!g_hbb_find(iter.m_en_type->m_entity_used_hbb, index))
+            return iter.m_en_type->m_type_id_and_size.get_offset();
+        return index;
+    }
+
+    static inline u32 s_next_entity(en_iterator_t& iter)
+    {
+        u32 index;
+        if (!g_hbb_upper(iter.m_en_type->m_entity_used_hbb, iter.m_en_id, index))
+            return iter.m_en_type->m_type_id_and_size.get_offset();
+        return index;
+    }
 
     s32 s_find_entity(en_iterator_t& iter)
     {
@@ -599,7 +620,7 @@ namespace xcore
                 {
                     if (!g_hbb_is_set(iter.m_en_type->m_tg_hbb, iter.m_tg_type_arr[i]) || !g_hbb_is_set(iter.m_en_type->m_a_tg_hbb[iter.m_tg_type_arr[i]], iter.m_en_id))
                     {
-                        iter.m_en_id += 1;
+                        iter.m_en_id = s_next_entity(iter);
                         goto iter_next_entity;
                     }
                 }
@@ -607,7 +628,7 @@ namespace xcore
                 {
                     if (!g_hbb_is_set(iter.m_en_type->m_cp_hbb, iter.m_cp_type_arr[i]) || !g_hbb_is_set(iter.m_en_type->m_a_cp_store_hbb[iter.m_cp_type_arr[i]], iter.m_en_id))
                     {
-                        iter.m_en_id += 1;
+                        iter.m_en_id = s_next_entity(iter);
                         goto iter_next_entity;
                     }
                 }
@@ -619,14 +640,13 @@ namespace xcore
                 u32 en_type_idx;
                 if (!g_hbb_upper(iter.m_ecs->m_entity_type_store.m_entity_type_used_hbb, iter.m_en_type->m_type_id_and_size.get_index(), en_type_idx))
                 {
-                    // No more entity types
                     iter.m_en_type = nullptr;
                     return -1;
                 }
 
                 // Take the pointer of this entity type and continue the search for an actual entity
-                iter.m_en_id   = 0;
                 iter.m_en_type = iter.m_ecs->m_entity_type_store.m_entity_type_array[en_type_idx];
+                iter.m_en_id   = s_first_entity(iter);
             }
             else
             {
@@ -639,14 +659,22 @@ namespace xcore
 
     void en_iterator_t::begin()
     {
-        m_en_type = nullptr;
-        m_en_id = 0;
-
-        u32 en_type_idx;
-        if (g_hbb_find(m_ecs->m_entity_type_store.m_entity_type_used_hbb, en_type_idx))
+        if (m_ecs != nullptr)
         {
-            m_en_type = m_ecs->m_entity_type_store.m_entity_type_array[en_type_idx];
-            m_en_id   = s_find_entity(*this);
+            m_en_type = nullptr;
+
+            u32 en_type_idx;
+            if (g_hbb_find(m_ecs->m_entity_type_store.m_entity_type_used_hbb, en_type_idx))
+            {
+                m_en_type = m_ecs->m_entity_type_store.m_entity_type_array[en_type_idx];
+
+                m_en_id = s_first_entity(*this);
+                m_en_id = s_find_entity(*this);
+            }
+        }
+        else
+        {
+            m_en_id = s_first_entity(*this);
         }
     }
 
@@ -654,8 +682,7 @@ namespace xcore
 
     void en_iterator_t::next()
     {
-        // We should have a m_entity_used_hbb that can tell us which the next 'alive' entity
-        m_en_id += 1;
+        m_en_id = s_next_entity(*this);
         m_en_id = s_find_entity(*this);
     }
 
