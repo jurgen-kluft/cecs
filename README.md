@@ -61,8 +61,7 @@ if (g_has_tag(ecs, e, alerted))
 
 // Iteration
 
-// TODO, currently in progress
-
+A basic iterator is in place that will iterate over all entity types. You can tell the iterator the components and tags that you are interested in.
 
 ```
 
