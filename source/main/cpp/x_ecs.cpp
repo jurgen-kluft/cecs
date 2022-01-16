@@ -592,23 +592,23 @@ namespace xcore
     void en_iterator_t::cp_type(cp_type_t* cp) { m_cp_type_arr[m_cp_type_cnt++] = (u16)cp->cp_id; }
     void en_iterator_t::tg_type(tg_type_t* tg) { m_tg_type_arr[m_tg_type_cnt++] = (u8)tg->tg_id; }
 
-    static inline u32 s_first_entity(en_iterator_t& iter)
+    static inline u32 s_first_entity(en_type_t* en_type)
     {
         u32 index;
-        if (!g_hbb_find(iter.m_en_type->m_entity_used_hbb, index))
-            return iter.m_en_type->m_type_id_and_size.get_offset();
+        if (!g_hbb_find(en_type->m_entity_used_hbb, index))
+            return en_type->m_type_id_and_size.get_offset();
         return index;
     }
 
-    static inline u32 s_next_entity(en_iterator_t& iter)
+    static inline u32 s_next_entity(en_type_t* en_type, u32 en_id)
     {
         u32 index;
-        if (!g_hbb_upper(iter.m_en_type->m_entity_used_hbb, iter.m_en_id, index))
-            return iter.m_en_type->m_type_id_and_size.get_offset();
+        if (!g_hbb_upper(en_type->m_entity_used_hbb, en_id, index))
+            return en_type->m_type_id_and_size.get_offset();
         return index;
     }
 
-    s32 s_find_entity(en_iterator_t& iter)
+    s32 s_search_matching_entity(en_iterator_t& iter)
     {
         while (true)
         {
@@ -620,7 +620,7 @@ namespace xcore
                 {
                     if (!g_hbb_is_set(iter.m_en_type->m_tg_hbb, iter.m_tg_type_arr[i]) || !g_hbb_is_set(iter.m_en_type->m_a_tg_hbb[iter.m_tg_type_arr[i]], iter.m_en_id))
                     {
-                        iter.m_en_id = s_next_entity(iter);
+                        iter.m_en_id = s_next_entity(iter.m_en_type, iter.m_en_id);
                         goto iter_next_entity;
                     }
                 }
@@ -628,7 +628,7 @@ namespace xcore
                 {
                     if (!g_hbb_is_set(iter.m_en_type->m_cp_hbb, iter.m_cp_type_arr[i]) || !g_hbb_is_set(iter.m_en_type->m_a_cp_store_hbb[iter.m_cp_type_arr[i]], iter.m_en_id))
                     {
-                        iter.m_en_id = s_next_entity(iter);
+                        iter.m_en_id = s_next_entity(iter.m_en_type, iter.m_en_id);
                         goto iter_next_entity;
                     }
                 }
@@ -646,7 +646,7 @@ namespace xcore
 
                 // Take the pointer of this entity type and continue the search for an actual entity
                 iter.m_en_type = iter.m_ecs->m_entity_type_store.m_entity_type_array[en_type_idx];
-                iter.m_en_id   = s_first_entity(iter);
+                iter.m_en_id   = s_first_entity(iter.m_en_type);
             }
             else
             {
@@ -668,13 +668,13 @@ namespace xcore
             {
                 m_en_type = m_ecs->m_entity_type_store.m_entity_type_array[en_type_idx];
 
-                m_en_id = s_first_entity(*this);
-                m_en_id = s_find_entity(*this);
+                m_en_id = s_first_entity(m_en_type);
+                m_en_id = s_search_matching_entity(*this);
             }
         }
-        else
+        else if (m_en_type != nullptr)
         {
-            m_en_id = s_first_entity(*this);
+            m_en_id = s_first_entity(m_en_type);
         }
     }
 
@@ -682,8 +682,8 @@ namespace xcore
 
     void en_iterator_t::next()
     {
-        m_en_id = s_next_entity(*this);
-        m_en_id = s_find_entity(*this);
+        m_en_id = s_next_entity(m_en_type, m_en_id);
+        m_en_id = s_search_matching_entity(*this);
     }
 
     bool en_iterator_t::end() const { return m_en_type == nullptr; }
