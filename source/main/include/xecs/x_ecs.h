@@ -69,6 +69,7 @@ namespace xcore
         u8         m_tg_type_arr[30]; // Only entities with the following tags
 
         void initialize(ecs_t*);
+        void initialize(en_type_t*);
 
         // Mark the things you want to iterate on
         void cp_type(cp_type_t*);

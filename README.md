@@ -61,7 +61,26 @@ if (g_has_tag(ecs, e, alerted))
 
 // Iteration
 
-A basic iterator is in place that will iterate over all entity types. You can tell the iterator the components and tags that you are interested in.
+en_iterator_t iter;
+iter.initialize(ecs);        // Iterate over all entity types
+//iter.initialize(en_type_go); // Only iterate over entities in this entity type
+
+iter.cp_type(bytecmp);
+iter.cp_type(poscmp);
+iter.tg_type(enemy);
+
+iter.begin();
+while (!iter.end())
+{
+    entity_t e = iter.item();
+
+    CHECK_TRUE(g_has_cp(ecs, e, bytecmp));
+    CHECK_TRUE(g_has_cp(ecs, e, poscmp));
+    CHECK_TRUE(g_has_tag(ecs, e, enemy));
+
+    iter.next();
+}
+
 
 ```
 

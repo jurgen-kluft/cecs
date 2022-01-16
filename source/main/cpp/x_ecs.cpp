@@ -573,6 +573,16 @@ namespace xcore
         m_tg_type_cnt = 0;
     }
 
+    void en_iterator_t::initialize(en_type_t* en_type)
+    {
+        m_ecs         = nullptr;
+        m_en_type     = en_type;
+        m_en_id       = 0;
+        m_cp_type_cnt = 0;
+        m_tg_type_cnt = 0;
+    }
+
+
     // Mark the things you want to iterate on
     void en_iterator_t::cp_type(cp_type_t* cp) { m_cp_type_arr[m_cp_type_cnt++] = (u16)cp->cp_id; }
     void en_iterator_t::tg_type(tg_type_t* tg) { m_tg_type_arr[m_tg_type_cnt++] = (u8)tg->tg_id; }
@@ -604,27 +614,33 @@ namespace xcore
                 return iter.m_en_id;
             }
 
-            u32 en_type_idx;
-            if (!g_hbb_upper(iter.m_ecs->m_entity_type_store.m_entity_type_used_hbb, iter.m_en_type->m_type_id_and_size.get_index(), en_type_idx))
+            if (iter.m_ecs != nullptr)
+            {
+                u32 en_type_idx;
+                if (!g_hbb_upper(iter.m_ecs->m_entity_type_store.m_entity_type_used_hbb, iter.m_en_type->m_type_id_and_size.get_index(), en_type_idx))
+                {
+                    // No more entity types
+                    iter.m_en_type = nullptr;
+                    return -1;
+                }
+
+                // Take the pointer of this entity type and continue the search for an actual entity
+                iter.m_en_id   = 0;
+                iter.m_en_type = iter.m_ecs->m_entity_type_store.m_entity_type_array[en_type_idx];
+            }
+            else
             {
                 // No more entity types
                 iter.m_en_type = nullptr;
                 return -1;
             }
-
-            // Take the pointer of this entity type and continue the search for an actual entity
-            iter.m_en_id   = 0;
-            iter.m_en_type = iter.m_ecs->m_entity_type_store.m_entity_type_array[en_type_idx];
         }
     }
 
     void en_iterator_t::begin()
     {
-        /*
-        Find the first entity type that matches the cp_type hbb and tg_type hbb
-        Then for that entity type find the first entity that actually has those components and/or tags
-        */
         m_en_type = nullptr;
+        m_en_id = 0;
 
         u32 en_type_idx;
         if (g_hbb_find(m_ecs->m_entity_type_store.m_entity_type_used_hbb, en_type_idx))
