@@ -61,8 +61,31 @@ UNITTEST_SUITE_BEGIN(ecs)
             cp_type_t* poscmp  = g_register_component_type<position_t>(ecs);
             cp_type_t* velcmp  = g_register_component_type<velocity_t>(ecs);
 
+			CHECK_EQUAL(0, bytecmp->cp_id);
+			CHECK_EQUAL(1, poscmp->cp_id);
+			CHECK_EQUAL(2, velcmp->cp_id);
+
             g_destroy_ecs(ecs);
         }
+
+		struct friendly {};
+		struct target {};
+		struct dirty {};
+
+		UNITTEST_TEST(register_tag_types)
+		{
+			ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+
+			tg_type_t* acmp  = g_register_tag_type<friendly>(ecs);
+			tg_type_t* bcmp  = g_register_tag_type<target>(ecs);
+			tg_type_t* ccmp  = g_register_tag_type<dirty>(ecs);
+
+			CHECK_EQUAL(0, acmp->tg_id);
+			CHECK_EQUAL(1, bcmp->tg_id);
+			CHECK_EQUAL(2, ccmp->tg_id);
+
+			g_destroy_ecs(ecs);
+		}
 
         UNITTEST_TEST(create_entities_in_one_entity_type)
         {

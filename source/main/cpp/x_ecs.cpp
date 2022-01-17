@@ -158,7 +158,7 @@ namespace xcore
     // component type, component type manager
     struct cp_nctype_t
     {
-        u32         cp_id;
+        u16         cp_id;
         u32         cp_sizeof;
         const char* cp_name;
     };
@@ -182,9 +182,9 @@ namespace xcore
         if (g_hbb_find(cps->m_a_cp_hbb, cp_id))
         {
             cp_nctype_t* cp_type     = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
-            cp_type[cp_id].cp_id     = cp_id;
-            cp_type[cp_id].cp_sizeof = cp_sizeof;
-            cp_type[cp_id].cp_name   = name;
+            cp_type->cp_id     = cp_id;
+            cp_type->cp_sizeof = cp_sizeof;
+            cp_type->cp_name   = name;
 
             g_hbb_clr(cps->m_a_cp_hbb, cp_id);
             return ((cp_type_t*)cp_type);
@@ -234,8 +234,8 @@ namespace xcore
         if (g_hbb_find(ts->m_a_tg_hbb, tg_id))
         {
             tg_nctype_t* tg_type   = (tg_nctype_t*)&ts->m_a_tg_type[tg_id];
-            tg_type[tg_id].tg_id   = tg_id;
-            tg_type[tg_id].tg_name = name;
+            tg_type->tg_id   = tg_id;
+            tg_type->tg_name = name;
 
             g_hbb_clr(ts->m_a_tg_hbb, tg_id);
             return ((tg_type_t*)tg_type);
@@ -323,6 +323,9 @@ namespace xcore
             {
                 et->m_a_entity[i] = 0;
             }
+
+			g_hbb_init(et->m_tg_hbb, tg_type_mgr_t::TAGS_MAX, 0);
+			g_hbb_init(et->m_cp_hbb, cp_type_mgr_t::COMPONENTS_MAX, 0);
 
             g_hbb_init(et->m_entity_free_hbb, max_entities, 1, allocator);
             g_hbb_init(et->m_entity_used_hbb, max_entities, 0, allocator);
@@ -608,9 +611,58 @@ namespace xcore
         return index;
     }
 
-    s32 s_search_matching_entity(en_iterator_t& iter)
+	static inline en_type_t* s_first_entity_type(ecs_t* ecs)
+	{
+		if (ecs!=nullptr)
+		{
+			u32 index;
+			if (g_hbb_find(ecs->m_entity_type_store.m_entity_type_used_hbb, index))
+				return ecs->m_entity_type_store.m_entity_type_array[index];
+		}
+		return nullptr;
+	}
+
+    static inline en_type_t* s_next_entity_type(ecs_t* ecs, en_type_t* en_type)
     {
-        while (true)
+        if (ecs!=nullptr)
+        {
+            u32 index;
+            if (g_hbb_upper(ecs->m_entity_type_store.m_entity_type_used_hbb, en_type->m_type_id_and_size.get_index(), index))
+                return ecs->m_entity_type_store.m_entity_type_array[index];
+        }
+        return nullptr;
+    }
+
+    static en_type_t* s_search_matching_entity_type(en_iterator_t& iter)
+    {
+    iter_next_entity_type:
+        while (iter.m_en_type != nullptr)
+        {
+            // Until we encounter an entity type that has all the required components/tags
+            for (s16 i = 0; i < iter.m_tg_type_cnt; ++i)
+            {
+                if (!g_hbb_is_set(iter.m_en_type->m_tg_hbb, iter.m_tg_type_arr[i]))
+                {
+					iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
+                    goto iter_next_entity_type;
+                }
+            }
+            for (s16 i = 0; i < iter.m_cp_type_cnt; ++i)
+            {
+                if (!g_hbb_is_set(iter.m_en_type->m_cp_hbb, iter.m_cp_type_arr[i]))
+                {
+					iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
+                    goto iter_next_entity_type;
+                }
+            }
+            return iter.m_en_type;
+        }
+        return nullptr;
+    }
+
+    static s32 s_search_matching_entity(en_iterator_t& iter)
+    {
+        while (iter.m_en_type != nullptr)
         {
         iter_next_entity:
             while (iter.m_en_id < iter.m_en_type->m_type_id_and_size.get_offset())
@@ -618,7 +670,7 @@ namespace xcore
                 // Until we encounter an entity that has all the required components/tags
                 for (s16 i = 0; i < iter.m_tg_type_cnt; ++i)
                 {
-                    if (!g_hbb_is_set(iter.m_en_type->m_tg_hbb, iter.m_tg_type_arr[i]) || !g_hbb_is_set(iter.m_en_type->m_a_tg_hbb[iter.m_tg_type_arr[i]], iter.m_en_id))
+                    if (!g_hbb_is_set(iter.m_en_type->m_a_tg_hbb[iter.m_tg_type_arr[i]], iter.m_en_id))
                     {
                         iter.m_en_id = s_next_entity(iter.m_en_type, iter.m_en_id);
                         goto iter_next_entity;
@@ -626,7 +678,7 @@ namespace xcore
                 }
                 for (s16 i = 0; i < iter.m_cp_type_cnt; ++i)
                 {
-                    if (!g_hbb_is_set(iter.m_en_type->m_cp_hbb, iter.m_cp_type_arr[i]) || !g_hbb_is_set(iter.m_en_type->m_a_cp_store_hbb[iter.m_cp_type_arr[i]], iter.m_en_id))
+                    if (!g_hbb_is_set(iter.m_en_type->m_a_cp_store_hbb[iter.m_cp_type_arr[i]], iter.m_en_id))
                     {
                         iter.m_en_id = s_next_entity(iter.m_en_type, iter.m_en_id);
                         goto iter_next_entity;
@@ -635,45 +687,27 @@ namespace xcore
                 return iter.m_en_id;
             }
 
-            if (iter.m_ecs != nullptr)
-            {
-                u32 en_type_idx;
-                if (!g_hbb_upper(iter.m_ecs->m_entity_type_store.m_entity_type_used_hbb, iter.m_en_type->m_type_id_and_size.get_index(), en_type_idx))
-                {
-                    iter.m_en_type = nullptr;
-                    return -1;
-                }
-
-                // Take the pointer of this entity type and continue the search for an actual entity
-                iter.m_en_type = iter.m_ecs->m_entity_type_store.m_entity_type_array[en_type_idx];
-                iter.m_en_id   = s_first_entity(iter.m_en_type);
-            }
-            else
-            {
-                // No more entity types
-                iter.m_en_type = nullptr;
-                return -1;
-            }
+			iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
+            iter.m_en_type = s_search_matching_entity_type(iter);
         }
+        return -1;
     }
 
     void en_iterator_t::begin()
     {
         if (m_ecs != nullptr)
         {
-            m_en_type = nullptr;
-
-            u32 en_type_idx;
-            if (g_hbb_find(m_ecs->m_entity_type_store.m_entity_type_used_hbb, en_type_idx))
+			m_en_type = s_first_entity_type(m_ecs);
+            m_en_type = s_search_matching_entity_type(*this);
+            if (m_en_type != nullptr)
             {
-                m_en_type = m_ecs->m_entity_type_store.m_entity_type_array[en_type_idx];
-
                 m_en_id = s_first_entity(m_en_type);
                 m_en_id = s_search_matching_entity(*this);
             }
         }
         else if (m_en_type != nullptr)
         {
+            m_en_type = s_search_matching_entity_type(*this);
             m_en_id = s_first_entity(m_en_type);
         }
     }
