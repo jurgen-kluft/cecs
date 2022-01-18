@@ -12,16 +12,16 @@ namespace xcore
     const entity_t g_null_entity = (entity_t)0xFFFFFFFF;
 
     typedef u16 entity_ver_t;
-    typedef u32 entity_id_t;
     typedef u16 entity_type_id_t;
+    typedef u32 entity_id_t;
 
-#define ECS_ENTITY_ID_MASK ((u32)0x0000FFFF)     // Mask to use to get the entity number out of an identifier
-#define ECS_ENTITY_TYPE_MASK ((u32)0x00FF0000)   // Mask to use to get the entity type out of an identifier
-#define ECS_ENTITY_TYPE_MAX ((u32)0x000000FF)    // Maximum type
-#define ECS_ENTITY_VERSION_MASK ((u32)0xFF00000) // Mask to use to get the version out of an identifier
-#define ECS_ENTITY_VERSION_MAX ((u32)0x000000FF) // Maximum version
-#define ECS_ENTITY_TYPE_SHIFT ((s8)16)           // Extent of the entity id within an identifier
-#define ECS_ENTITY_VERSION_SHIFT ((s8)24)        // Extent of the entity id + type within an identifier
+    const u32 ECS_ENTITY_ID_MASK       = (0x0000FFFF); // Mask to use to get the entity number out of an identifier
+    const u32 ECS_ENTITY_TYPE_MASK     = (0x00FF0000); // Mask to use to get the entity type out of an identifier
+    const u32 ECS_ENTITY_TYPE_MAX      = (0x000000FF); // Maximum type
+    const u32 ECS_ENTITY_VERSION_MASK  = (0xFF000000); // Mask to use to get the version out of an identifier
+    const u32 ECS_ENTITY_VERSION_MAX   = (0x000000FF); // Maximum version
+    const s16 ECS_ENTITY_TYPE_SHIFT    = (16);         // Extent of the entity id within an identifier
+    const s8  ECS_ENTITY_VERSION_SHIFT = (24);         // Extent of the entity id + type within an identifier
 
     // --------------------------------------------------------------------------------------------------------
     // --------------------------------------------------------------------------------------------------------
@@ -31,10 +31,10 @@ namespace xcore
     struct cp_type_t;
 
     // clang-format off
-    inline entity_ver_t     g_entity_version(entity_t e) { return ((u32)e & ECS_ENTITY_VERSION_MASK)>>ECS_ENTITY_VERSION_SHIFT; }
-    inline entity_type_id_t g_entity_type_id(entity_t e) { return ((u32)e & ECS_ENTITY_TYPE_MASK) >> ECS_ENTITY_TYPE_SHIFT; }
-    inline entity_id_t      g_entity_id(entity_t e)      { return (u32)e & ECS_ENTITY_ID_MASK; }
-    inline entity_t         g_make_entity(entity_ver_t ev, entity_type_id_t et, entity_id_t id) { return (u32)id | ((u32)et<<ECS_ENTITY_TYPE_SHIFT) | ((u32)ev<<ECS_ENTITY_VERSION_SHIFT); }
+    static inline entity_ver_t     g_entity_version(entity_t e) { return ((u32)e & ECS_ENTITY_VERSION_MASK)>>ECS_ENTITY_VERSION_SHIFT; }
+    static inline entity_type_id_t g_entity_type_id(entity_t e) { return ((u32)e & ECS_ENTITY_TYPE_MASK) >> ECS_ENTITY_TYPE_SHIFT; }
+    static inline entity_id_t      g_entity_id(entity_t e)      { return (u32)e & ECS_ENTITY_ID_MASK; }
+    static inline entity_t         g_make_entity(entity_ver_t ev, entity_type_id_t et, entity_id_t id) { return (u32)id | ((u32)et<<ECS_ENTITY_TYPE_SHIFT) | ((u32)ev<<ECS_ENTITY_VERSION_SHIFT); }
     // clang-format on
 
     // [index:12-bit, offset:20-bit]
@@ -181,10 +181,10 @@ namespace xcore
         u32 cp_id;
         if (g_hbb_find(cps->m_a_cp_hbb, cp_id))
         {
-            cp_nctype_t* cp_type     = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
-            cp_type->cp_id     = cp_id;
-            cp_type->cp_sizeof = cp_sizeof;
-            cp_type->cp_name   = name;
+            cp_nctype_t* cp_type = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
+            cp_type->cp_id       = cp_id;
+            cp_type->cp_sizeof   = cp_sizeof;
+            cp_type->cp_name     = name;
 
             g_hbb_clr(cps->m_a_cp_hbb, cp_id);
             return ((cp_type_t*)cp_type);
@@ -233,9 +233,9 @@ namespace xcore
         u32 tg_id;
         if (g_hbb_find(ts->m_a_tg_hbb, tg_id))
         {
-            tg_nctype_t* tg_type   = (tg_nctype_t*)&ts->m_a_tg_type[tg_id];
-            tg_type->tg_id   = tg_id;
-            tg_type->tg_name = name;
+            tg_nctype_t* tg_type = (tg_nctype_t*)&ts->m_a_tg_type[tg_id];
+            tg_type->tg_id       = tg_id;
+            tg_type->tg_name     = name;
 
             g_hbb_clr(ts->m_a_tg_hbb, tg_id);
             return ((tg_type_t*)tg_type);
@@ -324,8 +324,8 @@ namespace xcore
                 et->m_a_entity[i] = 0;
             }
 
-			g_hbb_init(et->m_tg_hbb, tg_type_mgr_t::TAGS_MAX, 0);
-			g_hbb_init(et->m_cp_hbb, cp_type_mgr_t::COMPONENTS_MAX, 0);
+            g_hbb_init(et->m_tg_hbb, tg_type_mgr_t::TAGS_MAX, 0);
+            g_hbb_init(et->m_cp_hbb, cp_type_mgr_t::COMPONENTS_MAX, 0);
 
             g_hbb_init(et->m_entity_free_hbb, max_entities, 1, allocator);
             g_hbb_init(et->m_entity_used_hbb, max_entities, 0, allocator);
@@ -611,20 +611,20 @@ namespace xcore
         return index;
     }
 
-	static inline en_type_t* s_first_entity_type(ecs_t* ecs)
-	{
-		if (ecs!=nullptr)
-		{
-			u32 index;
-			if (g_hbb_find(ecs->m_entity_type_store.m_entity_type_used_hbb, index))
-				return ecs->m_entity_type_store.m_entity_type_array[index];
-		}
-		return nullptr;
-	}
+    static inline en_type_t* s_first_entity_type(ecs_t* ecs)
+    {
+        if (ecs != nullptr)
+        {
+            u32 index;
+            if (g_hbb_find(ecs->m_entity_type_store.m_entity_type_used_hbb, index))
+                return ecs->m_entity_type_store.m_entity_type_array[index];
+        }
+        return nullptr;
+    }
 
     static inline en_type_t* s_next_entity_type(ecs_t* ecs, en_type_t* en_type)
     {
-        if (ecs!=nullptr)
+        if (ecs != nullptr)
         {
             u32 index;
             if (g_hbb_upper(ecs->m_entity_type_store.m_entity_type_used_hbb, en_type->m_type_id_and_size.get_index(), index))
@@ -643,7 +643,7 @@ namespace xcore
             {
                 if (!g_hbb_is_set(iter.m_en_type->m_tg_hbb, iter.m_tg_type_arr[i]))
                 {
-					iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
+                    iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
                     goto iter_next_entity_type;
                 }
             }
@@ -651,7 +651,7 @@ namespace xcore
             {
                 if (!g_hbb_is_set(iter.m_en_type->m_cp_hbb, iter.m_cp_type_arr[i]))
                 {
-					iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
+                    iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
                     goto iter_next_entity_type;
                 }
             }
@@ -687,7 +687,7 @@ namespace xcore
                 return iter.m_en_id;
             }
 
-			iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
+            iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
             iter.m_en_type = s_search_matching_entity_type(iter);
         }
         return -1;
@@ -697,7 +697,7 @@ namespace xcore
     {
         if (m_ecs != nullptr)
         {
-			m_en_type = s_first_entity_type(m_ecs);
+            m_en_type = s_first_entity_type(m_ecs);
             m_en_type = s_search_matching_entity_type(*this);
             if (m_en_type != nullptr)
             {
@@ -708,7 +708,7 @@ namespace xcore
         else if (m_en_type != nullptr)
         {
             m_en_type = s_search_matching_entity_type(*this);
-            m_en_id = s_first_entity(m_en_type);
+            m_en_id   = s_first_entity(m_en_type);
         }
     }
 

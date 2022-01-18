@@ -105,6 +105,25 @@ UNITTEST_SUITE_BEGIN(ecs)
             g_destroy_ecs(ecs);
         }
 
+        UNITTEST_TEST(create_delete_many_entities_in_one_entity_type)
+        {
+            ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+
+            en_type_t* ent0 = g_register_entity_type(ecs, 1024);
+
+            entity_t entities[512];
+            for (s32 i=0; i<512; ++i)
+            {
+                entities[i] = g_create_entity(ecs, ent0);
+            }
+            for (s32 i=0; i<512; ++i)
+            {
+                g_delete_entity(ecs, entities[i]);
+            }
+
+            g_destroy_ecs(ecs);
+        }
+
         UNITTEST_TEST(create_entity_and_set_component)
         {
             ecs_t* ecs = g_create_ecs(context_t::system_alloc());
