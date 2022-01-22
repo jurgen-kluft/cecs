@@ -9,6 +9,7 @@ tags
 
 #except the following files
 !.gitignore
+!.clang-format
 !*.cpp
 !*.hpp
 !*.c
