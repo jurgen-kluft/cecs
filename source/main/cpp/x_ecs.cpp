@@ -562,16 +562,8 @@ namespace xcore
     void g_set_tag(ecs_t* ecs, entity_t entity, tg_type_t* tg_type) { s_entity_set_tag(ecs, entity, *tg_type); }
     void g_rem_tag(ecs_t* ecs, entity_t entity, tg_type_t* tg_type) { s_entity_rem_tag(ecs, entity, *tg_type); }
 
-    // struct en_iterator_t // 232 bytes
-    // {
-    //     ecs_t*     m_ecs;
-    //     en_type_t* m_en_type;         // Current entity type
-    //     u32        m_en_id;           // Current entity id
-    //     u32        m_en_id_max;       // Maximum entity id of the entity type
-    //     u32        m_en_type_hbb[11]; // The entity types to iterate over
-    //     u32        m_cp_type_hbb[35]; // Only entities with the following components
-    //     u32        m_tg_type_hbb[7];  // Only entities with the following tags
-    // };
+    //////////////////////////////////////////////////////////////////////////
+    // en_iterator_t
 
     void en_iterator_t::initialize(ecs_t* ecs)
     {
