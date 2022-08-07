@@ -8,16 +8,22 @@ A entity component system with the following design decisions:
 - Iteration; iterate over entities that have specific components and/or tags
 - Should not depend on C++ templates
 
+If you manage your entity types well the resulting memory storage is very compact and
+exhibits very little waste.
+
+For prototyping you can introduce a single entity type and just work on your game
+and once every aspect becomes more crystalized you can then categorize entity types.
+
 ```c++
 
-// Entity Component System, create and destroy
+// Entity Component System; create and destroy
 ecs_t* ecs = g_create_ecs(alloc_t*);
 g_destroy_ecs(ecs_t* ecs);
 
-// Entity Type, 1024 is the maximum amount of entities in that type
+// Entity Type; 1024 is the maximum amount of entities in that type
 en_type_t const* en_type_go = g_register_entity_type(ecs, 1024);
 
-// Create / Delete entity
+// Create/Delete entity
 entity_t e = g_create_entity(ecs, en_type_go);
 g_delete_entity(ecs, e);
 
