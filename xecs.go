@@ -1,11 +1,11 @@
 package main
 
 import (
-	xcode "github.com/jurgen-kluft/xcode"
-	pkg "github.com/jurgen-kluft/xecs/package"
+	ccode "github.com/jurgen-kluft/ccode"
+	cpkg "github.com/jurgen-kluft/cecs/package"
 )
 
 func main() {
-	xcode.Init()
-	xcode.Generate(pkg.GetPackage())
+	ccode.Init()
+	ccode.Generate(cpkg.GetPackage())
 }

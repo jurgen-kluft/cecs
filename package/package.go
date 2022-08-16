@@ -1,8 +1,8 @@
 package xecs
 
 import (
+	"github.com/jurgen-kluft/ccode/denv"
 	xbase "github.com/jurgen-kluft/xbase/package"
-	"github.com/jurgen-kluft/xcode/denv"
 	xentry "github.com/jurgen-kluft/xentry/package"
 	xunittest "github.com/jurgen-kluft/xunittest/package"
 )

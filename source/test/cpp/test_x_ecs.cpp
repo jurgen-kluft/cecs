@@ -1,8 +1,8 @@
-#include "xbase/x_target.h"
-#include "xbase/x_buffer.h"
-#include "xecs/x_ecs.h"
+#include "cbase/c_target.h"
+#include "cbase/c_buffer.h"
+#include "cecs/c_ecs.h"
 
-#include "xunittest/xunittest.h"
+#include "cunittest/xunittest.h"
 
 namespace ncore
 {

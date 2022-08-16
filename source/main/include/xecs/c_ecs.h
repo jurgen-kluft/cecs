@@ -1,6 +1,6 @@
 #ifndef __XECS_ECS_H__
 #define __XECS_ECS_H__
-#include "xbase/x_target.h"
+#include "cbase/c_target.h"
 #ifdef USE_PRAGMA_ONCE
 #pragma once
 #endif
