@@ -5,7 +5,7 @@
 #pragma once
 #endif
 
-namespace xcore
+namespace ncore
 {
     typedef u32           entity_t;
     extern const entity_t g_null_entity;
@@ -79,6 +79,6 @@ namespace xcore
         bool     end() const;
     };
 
-} // namespace xcore
+} // namespace ncore
 
 #endif

@@ -7,7 +7,7 @@
 
 #include "xecs/x_ecs.h"
 
-namespace xcore
+namespace ncore
 {
     const entity_t g_null_entity = (entity_t)0xFFFFFFFF;
 
@@ -714,4 +714,4 @@ namespace xcore
 
     bool en_iterator_t::end() const { return m_en_type == nullptr; }
 
-} // namespace xcore
+} // namespace ncore

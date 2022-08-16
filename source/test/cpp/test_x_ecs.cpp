@@ -4,7 +4,7 @@
 
 #include "xunittest/xunittest.h"
 
-namespace xcore
+namespace ncore
 {
     // You can make components that are just system types, in this case just a byte
     template <> inline const char* nameof<u8>() { return "u8"; }
@@ -28,9 +28,9 @@ namespace xcore
     };
     template <> inline const char* nameof<physics_state_t>() { return "physics-state"; }
 
-} // namespace xcore
+} // namespace ncore
 
-using namespace xcore;
+using namespace ncore;
 
 UNITTEST_SUITE_BEGIN(ecs)
 {
