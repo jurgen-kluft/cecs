@@ -90,4 +90,4 @@ while (!iter.end())
 
 ## Dependencies
 
-- xbase (for alloc_t and hbb_t)
+- cbase (for alloc_t and hbb_t)
