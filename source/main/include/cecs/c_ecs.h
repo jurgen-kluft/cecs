@@ -1,5 +1,5 @@
-#ifndef __XECS_ECS_H__
-#define __XECS_ECS_H__
+#ifndef __CECS_ECS_H__
+#define __CECS_ECS_H__
 #include "cbase/c_target.h"
 #ifdef USE_PRAGMA_ONCE
 #pragma once
