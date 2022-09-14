@@ -1,12 +1,12 @@
-# xecs library
+# cecs library
 
-A entity component system with the following design decisions:
+An entity component system with the following design decisions:
 
 - Entity Type; for grouping use of components and tags
 - Component; attach/detach components to entities
 - Tag (1 bit); attach/detach a tag/flag to entities
 - Iteration; iterate over entities that have specific components and/or tags
-- Should not depend on C++ templates
+- No heavy use of and dependency on C++ templates
 
 If you manage your entity types well the resulting memory storage is very compact and
 exhibits very little waste.
@@ -21,7 +21,7 @@ ecs_t* ecs = g_create_ecs(alloc_t*);
 g_destroy_ecs(ecs_t* ecs);
 
 // Entity Type; 1024 is the maximum amount of entities in that type
-en_type_t const* en_type_go = g_register_entity_type(ecs, 1024);
+en_type_t* en_type_go = g_register_entity_type(ecs, 1024);
 
 // Create/Delete entity
 entity_t e = g_create_entity(ecs, en_type_go);
