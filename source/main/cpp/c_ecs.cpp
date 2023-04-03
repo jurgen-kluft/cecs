@@ -115,7 +115,7 @@ namespace ncore
     static inline s8 s_compute_index(u32 const bitset, u32 bit)
     {
         ASSERT((bit & bitset) == bit);
-        s8 const i = xcountBits(bitset & (bit - 1));
+        s8 const i = math::countBits(bitset & (bit - 1));
         return i;
     }
 
@@ -364,15 +364,14 @@ namespace ncore
                 g_hbb_set(et->m_entity_free_hbb, entity_id);
                 g_hbb_clr(et->m_entity_used_hbb, entity_id);
 
-                // NOTE: For all components for this entity type and mark them as unused for this entity
-
-                // Bruteforce (should use hbb iterator here)
-                for (s32 i = 0; i < cp_type_mgr_t::COMPONENTS_MAX; ++i)
+                // For all components in this entity type, mark them as unused for this entity.
+                // Even if not all of them might be marked as 'used' for this specific entity.
+                hbb_t used = (hbb_t)et->m_cp_hbb;
+                hbb_iter_t iter = g_hbb_iterator(user, 0, cp_type_mgr_t::COMPONENTS_MAX);
+                while (!iter.end())
                 {
-                    if (et->m_a_cp_store[i] == nullptr)
-                        continue;
-
-                    g_hbb_clr(et->m_a_cp_store_hbb[i], g_entity_id(e));
+                    g_hbb_clr(et->m_a_cp_store_hbb[iter.m_cur], g_entity_id(e));
+                    iter.next();
                 }
             }
         }
@@ -466,9 +465,12 @@ namespace ncore
 
     static bool s_entity_has_component(ecs_t* ecs, entity_t e, cp_type_t& cp_type)
     {
-        entity_type_id_t const en_type_id  = g_entity_type_id(e);
-        en_type_t const*       entity_type = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
-        return g_hbb_is_set(entity_type->m_a_cp_store_hbb[cp_type.cp_id], g_entity_id(e));
+        entity_type_id_t const en_type_id   = g_entity_type_id(e);
+        en_type_t const*       entity_type  = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
+        const hbb_t            cp_store_hbb = entity_type->m_a_cp_store_hbb[cp_type.cp_id];
+        if (cp_store_hbb == nullptr)
+            return false;
+        return g_hbb_is_set(cp_store_hbb, g_entity_id(e));
     }
 
     static void* s_entity_get_component(ecs_t* ecs, entity_t e, cp_type_t& cp_type)
@@ -476,6 +478,8 @@ namespace ncore
         entity_type_id_t const en_type_id    = g_entity_type_id(e);
         en_type_t const*       entity_type   = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
         u8*                    cp_store_data = entity_type->m_a_cp_store[cp_type.cp_id];
+        if (cp_store_data == nullptr)
+            return nullptr;
         u32 const              cp_offset     = g_entity_id(e);
         return cp_store_data + (cp_offset * cp_type.cp_sizeof);
     }
@@ -514,7 +518,10 @@ namespace ncore
     {
         entity_type_id_t const en_type_id  = g_entity_type_id(e);
         en_type_t const*       entity_type = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
-        return g_hbb_is_set(entity_type->m_a_tg_hbb[tg_type.tg_id], g_entity_id(e));
+        u32*                   tag_hbb     = entity_type->m_a_tg_hbb[tg_type.tg_id];
+        if (tag_hbb == nullptr)
+            return false;
+        return g_hbb_is_set(tag_hbb, g_entity_id(e));
     }
 
     static void s_entity_set_tag(ecs_t* ecs, entity_t e, tg_type_t& tg_type)
@@ -541,7 +548,7 @@ namespace ncore
         if (tag_hbb == nullptr)
             return;
         // Now clear the mark for this entity that he has attached this tag
-        g_hbb_clr(entity_type->m_a_tg_hbb[tg_type.tg_id], g_entity_id(e));
+        g_hbb_clr(tag_hbb, g_entity_id(e));
     }
 
     entity_t g_create_entity(ecs_t* es, en_type_t* et) { return s_create_entity(et); }
