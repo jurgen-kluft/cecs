@@ -60,8 +60,9 @@ namespace ncore
         {
             COMPONENTS_MAX = 1024,
         };
-        u32        m_a_cp_hbb[35]; // To identify which component stores are still free (to give out new component id)
-        cp_type_t* m_a_cp_type;    // The type information attached to each store
+        hbb_hdr_t  m_a_cp_hbb_hdr;
+        u32        m_a_cp_hbb[32 + 1]; // To identify which component stores are still free (to give out new component id)
+        cp_type_t* m_a_cp_type;        // The type information attached to each store
     };
 
     struct tg_type_mgr_t
@@ -70,8 +71,9 @@ namespace ncore
         {
             TAGS_MAX = 128,
         };
-        u32        m_a_tg_hbb[7]; // To identify which tag stores are still free (to give out new tag id)
-        tg_type_t* m_a_tg_type;   // The type information attached to each tag store
+        hbb_hdr_t  m_a_tg_hbb_hdr;
+        u32        m_a_tg_hbb[4 + 1]; // To identify which tag stores are still free (to give out new tag id)
+        tg_type_t* m_a_tg_type;       // The type information attached to each tag store
     };
 
     // Entity Type, (8 + 8 + sizeof(u32)*max-number-of-components) ~4Kb
@@ -81,15 +83,18 @@ namespace ncore
     // registering another entity type.
     struct en_type_t
     {
-        index_t m_type_id_and_size; // 4 bytes
-        u32     m_cp_hbb[35];       // 140 bytes, hbb to indicate which components are used by this entity type
-        hbb_t*  m_a_cp_store_hbb;   // 8192 bytes
-        u8**    m_a_cp_store;       // 8192 bytes
-        u32     m_tg_hbb[7];        // 28 bytes, which tag is registered by the entity type (max 128)
-        hbb_t*  m_a_tg_hbb;         // 8 bytes, every registered tag has a hbb
-        hbb_t   m_entity_free_hbb;  // 8 bytes, which entity is free
-        hbb_t   m_entity_used_hbb;  // 8 bytes, which entity is used
-        u8*     m_a_entity;         // 8 bytes, just versions
+        index_t     m_type_id_and_size; // 4 bytes
+        hbb_hdr_t   m_cp_hbb_hdr;       // 8 bytes
+        u32         m_cp_hbb[32 + 1];   // 140 bytes, hbb to indicate which components are used by this entity type
+        hbb_data_t* m_a_cp_store_hbb;   // 8192 bytes
+        u8**        m_a_cp_store;       // 8192 bytes
+        hbb_hdr_t   m_tg_hbb_hdr;       // 8 bytes
+        u32         m_tg_hbb[4 + 1];    // 28 bytes, which tag is registered by the entity type (max 128)
+        hbb_data_t* m_a_tg_hbb;         // 8 bytes, every registered tag has a hbb
+        hbb_hdr_t   m_entity_hbb_hdr;   // 8 bytes
+        hbb_data_t  m_entity_free_hbb;  // 8 bytes, which entity is free
+        hbb_data_t  m_entity_used_hbb;  // 8 bytes, which entity is used
+        u8*         m_a_entity;         // 8 bytes, just versions
     };
 
     struct en_type_mgr_t
@@ -98,9 +103,9 @@ namespace ncore
         {
             ENTITY_TYPE_MAX = 256, // (related to ECS_ENTITY_TYPE_MASK)
         };
-
-        u32         m_entity_type_used_hbb[11];
-        u32         m_entity_type_free_hbb[11];
+        hbb_hdr_t   m_entity_type_hbb_hdr;
+        u32         m_entity_type_used_hbb[8 + 1];
+        u32         m_entity_type_free_hbb[8 + 1];
         en_type_t** m_entity_type_array;
     };
 
@@ -165,7 +170,8 @@ namespace ncore
 
     static void s_init(cp_type_mgr_t* cps, alloc_t* allocator)
     {
-        g_hbb_init(cps->m_a_cp_hbb, cp_type_mgr_t::COMPONENTS_MAX, 1);
+        g_hbb_init(cps->m_a_cp_hbb_hdr, cp_type_mgr_t::COMPONENTS_MAX);
+        g_hbb_init(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, 1);
         cps->m_a_cp_type = (cp_type_t*)allocator->allocate(sizeof(cp_type_t) * cp_type_mgr_t::COMPONENTS_MAX);
     }
 
@@ -173,20 +179,20 @@ namespace ncore
     {
         allocator->deallocate(cps->m_a_cp_type);
         cps->m_a_cp_type = nullptr;
-        g_hbb_init(cps->m_a_cp_hbb, cp_type_mgr_t::COMPONENTS_MAX, 1);
+        g_hbb_init(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, 1);
     }
 
     static cp_type_t* s_register_cp_type(cp_type_mgr_t* cps, u32 cp_sizeof, const char* name)
     {
         u32 cp_id;
-        if (g_hbb_find(cps->m_a_cp_hbb, cp_id))
+        if (g_hbb_find(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, cp_id))
         {
             cp_nctype_t* cp_type = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
             cp_type->cp_id       = cp_id;
             cp_type->cp_sizeof   = cp_sizeof;
             cp_type->cp_name     = name;
 
-            g_hbb_clr(cps->m_a_cp_hbb, cp_id);
+            g_hbb_clr(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, cp_id);
             return ((cp_type_t*)cp_type);
         }
         return nullptr;
@@ -201,7 +207,7 @@ namespace ncore
     static void s_unregister_cp_type(cp_type_mgr_t* cps, cp_type_t* cp_type)
     {
         u32 const cp_id = cp_type->cp_id;
-        g_hbb_set(cps->m_a_cp_hbb, cp_id);
+        g_hbb_set(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, cp_id);
     }
 
     // --------------------------------------------------------------------------------------------------------
@@ -217,7 +223,8 @@ namespace ncore
 
     static void s_init(tg_type_mgr_t* ts, alloc_t* allocator)
     {
-        g_hbb_init(ts->m_a_tg_hbb, tg_type_mgr_t::TAGS_MAX, 1);
+        g_hbb_init(ts->m_a_tg_hbb_hdr, tg_type_mgr_t::TAGS_MAX);
+        g_hbb_init(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, 1);
         ts->m_a_tg_type = (tg_type_t*)allocator->allocate(sizeof(tg_type_t) * tg_type_mgr_t::TAGS_MAX);
     }
 
@@ -225,19 +232,19 @@ namespace ncore
     {
         allocator->deallocate(ts->m_a_tg_type);
         ts->m_a_tg_type = nullptr;
-        g_hbb_init(ts->m_a_tg_hbb, tg_type_mgr_t::TAGS_MAX, 1);
+        g_hbb_init(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, 1);
     }
 
     static tg_type_t* s_register_tag_type(tg_type_mgr_t* ts, const char* name)
     {
         u32 tg_id;
-        if (g_hbb_find(ts->m_a_tg_hbb, tg_id))
+        if (g_hbb_find(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, tg_id))
         {
             tg_nctype_t* tg_type = (tg_nctype_t*)&ts->m_a_tg_type[tg_id];
             tg_type->tg_id       = tg_id;
             tg_type->tg_name     = name;
 
-            g_hbb_clr(ts->m_a_tg_hbb, tg_id);
+            g_hbb_clr(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, tg_id);
             return ((tg_type_t*)tg_type);
         }
         return nullptr;
@@ -252,7 +259,7 @@ namespace ncore
     static void s_unregister_tg_type(tg_type_mgr_t* cps, tg_type_t* cp_type)
     {
         u32 const tg_id = cp_type->tg_id;
-        g_hbb_set(cps->m_a_tg_hbb, tg_id);
+        g_hbb_set(cps->m_a_tg_hbb_hdr, cps->m_a_tg_hbb, tg_id);
     }
 
     // --------------------------------------------------------------------------------------------------------
@@ -269,16 +276,18 @@ namespace ncore
         et->m_entity_free_hbb  = nullptr;
         et->m_entity_used_hbb  = nullptr;
         et->m_a_entity         = nullptr;
-        g_hbb_init(et->m_cp_hbb, 1024, 0);
-        g_hbb_init(et->m_tg_hbb, 128, 0);
+        g_hbb_init(et->m_cp_hbb_hdr, et->m_cp_hbb, 0);
+        g_hbb_init(et->m_tg_hbb_hdr, et->m_tg_hbb, 0);
     }
 
     static inline bool s_is_registered(en_type_t const* et) { return !et->m_type_id_and_size.is_null(); }
 
     static void s_init(en_type_mgr_t* es, alloc_t* allocator)
     {
-        g_hbb_init(es->m_entity_type_free_hbb, en_type_mgr_t::ENTITY_TYPE_MAX, 1);
-        g_hbb_init(es->m_entity_type_used_hbb, en_type_mgr_t::ENTITY_TYPE_MAX, 0);
+        g_hbb_init(es->m_entity_type_hbb_hdr, en_type_mgr_t::ENTITY_TYPE_MAX);
+
+        g_hbb_init(es->m_entity_type_hbb_hdr, es->m_entity_type_free_hbb, 1);
+        g_hbb_init(es->m_entity_type_hbb_hdr, es->m_entity_type_used_hbb, 0);
 
         es->m_entity_type_array = (en_type_t**)allocator->allocate(sizeof(en_type_t*) * (en_type_mgr_t::ENTITY_TYPE_MAX));
         for (s32 i = 0; i < en_type_mgr_t::ENTITY_TYPE_MAX; ++i)
@@ -288,15 +297,15 @@ namespace ncore
     }
 
     static en_type_t*& s_get_entity_type(en_type_mgr_t* es, u32 entity_type_id) { return es->m_entity_type_array[entity_type_id]; }
-    static bool        s_has_component(en_type_t const* et, u32 cp_id) { return g_hbb_is_set((hbb_t)et->m_cp_hbb, cp_id); }
+    static bool        s_has_component(en_type_t const* et, u32 cp_id) { return g_hbb_is_set(et->m_cp_hbb_hdr, (hbb_data_t)et->m_cp_hbb, cp_id); }
 
     static en_type_t* s_register_entity_type(en_type_mgr_t* es, u32 max_entities, alloc_t* allocator)
     {
         u32 entity_type_id = 0;
-        if (g_hbb_find(es->m_entity_type_free_hbb, entity_type_id))
+        if (g_hbb_find(es->m_entity_type_hbb_hdr, es->m_entity_type_free_hbb, entity_type_id))
         {
-            g_hbb_clr(es->m_entity_type_free_hbb, entity_type_id);
-            g_hbb_set(es->m_entity_type_used_hbb, entity_type_id);
+            g_hbb_clr(es->m_entity_type_hbb_hdr, es->m_entity_type_free_hbb, entity_type_id);
+            g_hbb_set(es->m_entity_type_hbb_hdr, es->m_entity_type_used_hbb, entity_type_id);
 
             en_type_t*& et = s_get_entity_type(es, entity_type_id);
             et             = (en_type_t*)allocator->allocate(sizeof(en_type_t));
@@ -304,7 +313,7 @@ namespace ncore
             et->m_type_id_and_size.set_index(entity_type_id);
             et->m_type_id_and_size.set_offset(max_entities);
 
-            et->m_a_cp_store_hbb = (hbb_t*)allocator->allocate(sizeof(hbb_t) * cp_type_mgr_t::COMPONENTS_MAX);
+            et->m_a_cp_store_hbb = (hbb_data_t*)allocator->allocate(sizeof(hbb_data_t) * cp_type_mgr_t::COMPONENTS_MAX);
             et->m_a_cp_store     = (u8**)allocator->allocate(sizeof(u8*) * cp_type_mgr_t::COMPONENTS_MAX);
             for (s32 i = 0; i < cp_type_mgr_t::COMPONENTS_MAX; ++i)
             {
@@ -312,7 +321,7 @@ namespace ncore
                 et->m_a_cp_store_hbb[i] = nullptr;
             }
 
-            et->m_a_tg_hbb = (hbb_t*)allocator->allocate(sizeof(hbb_t) * tg_type_mgr_t::TAGS_MAX);
+            et->m_a_tg_hbb = (hbb_data_t*)allocator->allocate(sizeof(hbb_data_t) * tg_type_mgr_t::TAGS_MAX);
             for (s32 i = 0; i < tg_type_mgr_t::TAGS_MAX; ++i)
             {
                 et->m_a_tg_hbb[i] = nullptr;
@@ -324,11 +333,14 @@ namespace ncore
                 et->m_a_entity[i] = 0;
             }
 
-            g_hbb_init(et->m_tg_hbb, tg_type_mgr_t::TAGS_MAX, 0);
-            g_hbb_init(et->m_cp_hbb, cp_type_mgr_t::COMPONENTS_MAX, 0);
+            g_hbb_init(et->m_tg_hbb_hdr, tg_type_mgr_t::TAGS_MAX);
+            g_hbb_init(et->m_tg_hbb_hdr, et->m_tg_hbb, 0);
+            g_hbb_init(et->m_cp_hbb_hdr, cp_type_mgr_t::COMPONENTS_MAX);
+            g_hbb_init(et->m_cp_hbb_hdr, et->m_cp_hbb, 0);
 
-            g_hbb_init(et->m_entity_free_hbb, max_entities, 1, allocator);
-            g_hbb_init(et->m_entity_used_hbb, max_entities, 0, allocator);
+            g_hbb_init(et->m_entity_hbb_hdr, max_entities);
+            g_hbb_init(et->m_entity_hbb_hdr, et->m_entity_free_hbb, 1, allocator);
+            g_hbb_init(et->m_entity_hbb_hdr, et->m_entity_used_hbb, 0, allocator);
 
             return et;
         }
@@ -340,10 +352,10 @@ namespace ncore
         if (s_is_registered(et))
         {
             u32 entity_id = 0;
-            if (g_hbb_find(et->m_entity_free_hbb, entity_id))
+            if (g_hbb_find(et->m_entity_hbb_hdr, et->m_entity_free_hbb, entity_id))
             {
-                g_hbb_clr(et->m_entity_free_hbb, entity_id);
-                g_hbb_set(et->m_entity_used_hbb, entity_id);
+                g_hbb_clr(et->m_entity_hbb_hdr, et->m_entity_free_hbb, entity_id);
+                g_hbb_set(et->m_entity_hbb_hdr, et->m_entity_used_hbb, entity_id);
 
                 u8&              eVER  = et->m_a_entity[entity_id];
                 entity_type_id_t eTYPE = et->m_type_id_and_size.get_index();
@@ -359,18 +371,17 @@ namespace ncore
         if (s_is_registered(et))
         {
             u32 const entity_id = g_entity_id(e);
-            if (!g_hbb_is_set(et->m_entity_free_hbb, entity_id))
+            if (!g_hbb_is_set(et->m_entity_hbb_hdr, et->m_entity_free_hbb, entity_id))
             {
-                g_hbb_set(et->m_entity_free_hbb, entity_id);
-                g_hbb_clr(et->m_entity_used_hbb, entity_id);
+                g_hbb_set(et->m_entity_hbb_hdr, et->m_entity_free_hbb, entity_id);
+                g_hbb_clr(et->m_entity_hbb_hdr, et->m_entity_used_hbb, entity_id);
 
                 // For all components in this entity type, mark them as unused for this entity.
                 // Even if not all of them might be marked as 'used' for this specific entity.
-                hbb_t used = (hbb_t)et->m_cp_hbb;
-                hbb_iter_t iter = g_hbb_iterator(user, 0, cp_type_mgr_t::COMPONENTS_MAX);
+                hbb_iter_t iter = g_hbb_iterator(et->m_cp_hbb_hdr, et->m_cp_hbb, 0, cp_type_mgr_t::COMPONENTS_MAX);
                 while (!iter.end())
                 {
-                    g_hbb_clr(et->m_a_cp_store_hbb[iter.m_cur], g_entity_id(e));
+                    g_hbb_clr(et->m_cp_hbb_hdr, et->m_a_cp_store_hbb[iter.m_cur], g_entity_id(e));
                     iter.next();
                 }
             }
@@ -386,8 +397,8 @@ namespace ncore
         en_type_t*& et             = es->m_entity_type_array[entity_type_id];
         if (et != nullptr)
         {
-            g_hbb_set(es->m_entity_type_free_hbb, entity_type_id);
-            g_hbb_clr(es->m_entity_type_used_hbb, entity_type_id);
+            g_hbb_set(es->m_entity_type_hbb_hdr, es->m_entity_type_free_hbb, entity_type_id);
+            g_hbb_clr(es->m_entity_type_hbb_hdr, es->m_entity_type_used_hbb, entity_type_id);
 
             for (s32 i = 0; i < cp_type_mgr_t::COMPONENTS_MAX; ++i)
             {
@@ -403,7 +414,7 @@ namespace ncore
             {
                 if (et->m_a_tg_hbb[i] == nullptr)
                     continue;
-                g_hbb_release((hbb_t&)et->m_a_tg_hbb[i], allocator);
+                g_hbb_release((hbb_data_t&)et->m_a_tg_hbb[i], allocator);
             }
 
             allocator->deallocate(et->m_a_cp_store);
@@ -411,8 +422,8 @@ namespace ncore
             allocator->deallocate(et->m_a_tg_hbb);
             allocator->deallocate(et->m_a_entity);
 
-            g_hbb_release((hbb_t&)et->m_entity_free_hbb, allocator);
-            g_hbb_release((hbb_t&)et->m_entity_used_hbb, allocator);
+            g_hbb_release((hbb_data_t&)et->m_entity_free_hbb, allocator);
+            g_hbb_release((hbb_data_t&)et->m_entity_used_hbb, allocator);
 
             s_clear(et);
             allocator->deallocate(et);
@@ -467,20 +478,21 @@ namespace ncore
     {
         entity_type_id_t const en_type_id   = g_entity_type_id(e);
         en_type_t const*       entity_type  = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
-        const hbb_t            cp_store_hbb = entity_type->m_a_cp_store_hbb[cp_type.cp_id];
+        const hbb_data_t       cp_store_hbb = entity_type->m_a_cp_store_hbb[cp_type.cp_id];
         if (cp_store_hbb == nullptr)
             return false;
-        return g_hbb_is_set(cp_store_hbb, g_entity_id(e));
+        return g_hbb_is_set(entity_type->m_cp_hbb_hdr, cp_store_hbb, g_entity_id(e));
     }
 
     static void* s_entity_get_component(ecs_t* ecs, entity_t e, cp_type_t& cp_type)
     {
-        entity_type_id_t const en_type_id    = g_entity_type_id(e);
-        en_type_t const*       entity_type   = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
-        u8*                    cp_store_data = entity_type->m_a_cp_store[cp_type.cp_id];
-        if (cp_store_data == nullptr)
+        entity_type_id_t const en_type_id   = g_entity_type_id(e);
+        en_type_t const*       entity_type  = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
+        const hbb_data_t       cp_store_hbb = entity_type->m_a_cp_store_hbb[cp_type.cp_id];
+        if (cp_store_hbb == nullptr || !g_hbb_is_set(entity_type->m_cp_hbb_hdr, cp_store_hbb, g_entity_id(e)))
             return nullptr;
-        u32 const              cp_offset     = g_entity_id(e);
+        u8*       cp_store_data = entity_type->m_a_cp_store[cp_type.cp_id];
+        u32 const cp_offset     = g_entity_id(e);
         return cp_store_data + (cp_offset * cp_type.cp_sizeof);
     }
 
@@ -493,13 +505,13 @@ namespace ncore
         {
             u32 const count   = entity_type->m_type_id_and_size.get_offset();
             cp_store_data     = (u8*)ecs->m_allocator->allocate(count * cp_type.cp_sizeof);
-            u32* cp_store_hbb = (u32*)ecs->m_allocator->allocate(sizeof(u32) * g_sizeof_hbb(count));
-            g_hbb_init(cp_store_hbb, count, 0);
+            u32* cp_store_hbb = (u32*)ecs->m_allocator->allocate(sizeof(u32) * g_hbb_sizeof_data(count));
+            g_hbb_init(entity_type->m_cp_hbb_hdr, cp_store_hbb, count, 0);
             entity_type->m_a_cp_store_hbb[cp_type.cp_id] = cp_store_hbb;
-            g_hbb_set(entity_type->m_cp_hbb, cp_type.cp_id);
+            g_hbb_set(entity_type->m_cp_hbb_hdr, entity_type->m_cp_hbb, cp_type.cp_id);
         }
         // Now set the mark for this entity that he has attached this component
-        g_hbb_set(entity_type->m_a_cp_store_hbb[cp_type.cp_id], g_entity_id(e));
+        g_hbb_set(entity_type->m_cp_hbb_hdr, entity_type->m_a_cp_store_hbb[cp_type.cp_id], g_entity_id(e));
     }
 
     // Remove/detach component from the entity
@@ -511,7 +523,7 @@ namespace ncore
         if (cp_store_data == nullptr)
             return;
         // Now set the mark for this entity that he has attached this component
-        g_hbb_set(entity_type->m_a_cp_store_hbb[cp_type.cp_id], g_entity_id(e));
+        g_hbb_set(entity_type->m_cp_hbb_hdr, entity_type->m_a_cp_store_hbb[cp_type.cp_id], g_entity_id(e));
     }
 
     static bool s_entity_has_tag(ecs_t* ecs, entity_t e, tg_type_t& tg_type)
@@ -521,23 +533,24 @@ namespace ncore
         u32*                   tag_hbb     = entity_type->m_a_tg_hbb[tg_type.tg_id];
         if (tag_hbb == nullptr)
             return false;
-        return g_hbb_is_set(tag_hbb, g_entity_id(e));
+        return g_hbb_is_set(entity_type->m_tg_hbb_hdr, tag_hbb, g_entity_id(e));
     }
 
     static void s_entity_set_tag(ecs_t* ecs, entity_t e, tg_type_t& tg_type)
     {
         entity_type_id_t const en_type_id  = g_entity_type_id(e);
         en_type_t*             entity_type = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
-        u32*&                  tag_hbb     = entity_type->m_a_tg_hbb[tg_type.tg_id];
+        hbb_data_t&            tag_hbb     = entity_type->m_a_tg_hbb[tg_type.tg_id];
         if (tag_hbb == nullptr)
         {
             u32 const count = entity_type->m_type_id_and_size.get_offset();
-            g_hbb_init(tag_hbb, count, 0, ecs->m_allocator);
+            ASSERT(count == entity_type->m_tg_hbb_hdr.get_max_bits());
+            g_hbb_init(entity_type->m_tg_hbb_hdr, tag_hbb, 0, ecs->m_allocator);
             entity_type->m_a_tg_hbb[tg_type.tg_id] = tag_hbb;
-            g_hbb_set(entity_type->m_tg_hbb, tg_type.tg_id);
+            g_hbb_set(entity_type->m_tg_hbb_hdr, entity_type->m_tg_hbb, tg_type.tg_id);
         }
         // Now set the mark for this entity to indicate the tag is attached
-        g_hbb_set(entity_type->m_a_tg_hbb[tg_type.tg_id], g_entity_id(e));
+        g_hbb_set(entity_type->m_tg_hbb_hdr, entity_type->m_a_tg_hbb[tg_type.tg_id], g_entity_id(e));
     }
 
     static void s_entity_rem_tag(ecs_t* ecs, entity_t e, tg_type_t& tg_type)
@@ -548,7 +561,7 @@ namespace ncore
         if (tag_hbb == nullptr)
             return;
         // Now clear the mark for this entity that he has attached this tag
-        g_hbb_clr(tag_hbb, g_entity_id(e));
+        g_hbb_clr(entity_type->m_tg_hbb_hdr, tag_hbb, g_entity_id(e));
     }
 
     entity_t g_create_entity(ecs_t* es, en_type_t* et) { return s_create_entity(et); }
@@ -597,7 +610,7 @@ namespace ncore
     static inline u32 s_first_entity(en_type_t* en_type)
     {
         u32 index;
-        if (!g_hbb_find(en_type->m_entity_used_hbb, index))
+        if (!g_hbb_find(en_type->m_entity_hbb_hdr, en_type->m_entity_used_hbb, index))
             return en_type->m_type_id_and_size.get_offset();
         return index;
     }
@@ -605,7 +618,7 @@ namespace ncore
     static inline u32 s_next_entity(en_type_t* en_type, u32 en_id)
     {
         u32 index;
-        if (!g_hbb_upper(en_type->m_entity_used_hbb, en_id, index))
+        if (!g_hbb_upper(en_type->m_entity_hbb_hdr, en_type->m_entity_used_hbb, en_id, index))
             return en_type->m_type_id_and_size.get_offset();
         return index;
     }
@@ -615,7 +628,7 @@ namespace ncore
         if (ecs != nullptr)
         {
             u32 index;
-            if (g_hbb_find(ecs->m_entity_type_store.m_entity_type_used_hbb, index))
+            if (g_hbb_find(ecs->m_entity_type_store.m_entity_type_hbb_hdr, ecs->m_entity_type_store.m_entity_type_used_hbb, index))
                 return ecs->m_entity_type_store.m_entity_type_array[index];
         }
         return nullptr;
@@ -626,7 +639,7 @@ namespace ncore
         if (ecs != nullptr)
         {
             u32 index;
-            if (g_hbb_upper(ecs->m_entity_type_store.m_entity_type_used_hbb, en_type->m_type_id_and_size.get_index(), index))
+            if (g_hbb_upper(ecs->m_entity_type_store.m_entity_type_hbb_hdr, ecs->m_entity_type_store.m_entity_type_used_hbb, en_type->m_type_id_and_size.get_index(), index))
                 return ecs->m_entity_type_store.m_entity_type_array[index];
         }
         return nullptr;
@@ -640,7 +653,7 @@ namespace ncore
             // Until we encounter an entity type that has all the required components/tags
             for (s16 i = 0; i < iter.m_tg_type_cnt; ++i)
             {
-                if (!g_hbb_is_set(iter.m_en_type->m_tg_hbb, iter.m_tg_type_arr[i]))
+                if (!g_hbb_is_set(iter.m_en_type->m_tg_hbb_hdr, iter.m_en_type->m_tg_hbb, iter.m_tg_type_arr[i]))
                 {
                     iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
                     goto iter_next_entity_type;
@@ -648,7 +661,7 @@ namespace ncore
             }
             for (s16 i = 0; i < iter.m_cp_type_cnt; ++i)
             {
-                if (!g_hbb_is_set(iter.m_en_type->m_cp_hbb, iter.m_cp_type_arr[i]))
+                if (!g_hbb_is_set(iter.m_en_type->m_cp_hbb_hdr, iter.m_en_type->m_cp_hbb, iter.m_cp_type_arr[i]))
                 {
                     iter.m_en_type = s_next_entity_type(iter.m_ecs, iter.m_en_type);
                     goto iter_next_entity_type;
@@ -669,7 +682,7 @@ namespace ncore
                 // Until we encounter an entity that has all the required components/tags
                 for (s16 i = 0; i < iter.m_tg_type_cnt; ++i)
                 {
-                    if (!g_hbb_is_set(iter.m_en_type->m_a_tg_hbb[iter.m_tg_type_arr[i]], iter.m_en_id))
+                    if (!g_hbb_is_set(iter.m_en_type->m_tg_hbb_hdr, iter.m_en_type->m_a_tg_hbb[iter.m_tg_type_arr[i]], iter.m_en_id))
                     {
                         iter.m_en_id = s_next_entity(iter.m_en_type, iter.m_en_id);
                         goto iter_next_entity;
@@ -677,7 +690,7 @@ namespace ncore
                 }
                 for (s16 i = 0; i < iter.m_cp_type_cnt; ++i)
                 {
-                    if (!g_hbb_is_set(iter.m_en_type->m_a_cp_store_hbb[iter.m_cp_type_arr[i]], iter.m_en_id))
+                    if (!g_hbb_is_set(iter.m_en_type->m_cp_hbb_hdr, iter.m_en_type->m_a_cp_store_hbb[iter.m_cp_type_arr[i]], iter.m_en_id))
                     {
                         iter.m_en_id = s_next_entity(iter.m_en_type, iter.m_en_id);
                         goto iter_next_entity;

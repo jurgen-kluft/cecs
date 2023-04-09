@@ -16,7 +16,7 @@ namespace ncore
     struct cp_type_t
     {
         u16 const         cp_id;
-        u32 const         cp_sizeof;
+        u16 const         cp_sizeof;
         const char* const cp_name;
     };
 
