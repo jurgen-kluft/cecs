@@ -506,7 +506,7 @@ namespace ncore
             u32 const count   = entity_type->m_type_id_and_size.get_offset();
             cp_store_data     = (u8*)ecs->m_allocator->allocate(count * cp_type.cp_sizeof);
             u32* cp_store_hbb = (u32*)ecs->m_allocator->allocate(sizeof(u32) * g_hbb_sizeof_data(count));
-            g_hbb_init(entity_type->m_cp_hbb_hdr, cp_store_hbb, count, 0);
+            g_hbb_init(entity_type->m_cp_hbb_hdr, cp_store_hbb, 0);
             entity_type->m_a_cp_store_hbb[cp_type.cp_id] = cp_store_hbb;
             g_hbb_set(entity_type->m_cp_hbb_hdr, entity_type->m_cp_hbb, cp_type.cp_id);
         }
@@ -543,8 +543,6 @@ namespace ncore
         hbb_data_t&            tag_hbb     = entity_type->m_a_tg_hbb[tg_type.tg_id];
         if (tag_hbb == nullptr)
         {
-            u32 const count = entity_type->m_type_id_and_size.get_offset();
-            ASSERT(count == entity_type->m_tg_hbb_hdr.get_max_bits());
             g_hbb_init(entity_type->m_tg_hbb_hdr, tag_hbb, 0, ecs->m_allocator);
             entity_type->m_a_tg_hbb[tg_type.tg_id] = tag_hbb;
             g_hbb_set(entity_type->m_tg_hbb_hdr, entity_type->m_tg_hbb, tg_type.tg_id);
