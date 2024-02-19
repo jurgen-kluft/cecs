@@ -14,6 +14,10 @@ exhibits very little waste.
 For prototyping you can introduce a single entity type and just work on your game
 and once every aspect becomes more crystalized you can then categorize entity types.
 
+NOTE: This library has been mostly a development out of curiousity and figuring out how
+to come up with something simple and efficient. The primary focus was on memory consumption 
+with the secondary focus on performance.  
+
 ```c++
 
 // Entity Component System; create and destroy
@@ -54,7 +58,7 @@ struct alerted_t{};
 // You can give a name to a tag like this (will be visible in tg_type_t)
 template <> inline const char* nameof<alerted_t>() { return "alerted"; }
 
-tg_type_t* alerted = g_register_tag_type<marked_t>(ecs);
+tg_type_t* alerted = g_register_tag_type<alerted_t>(ecs);
 
 g_set_tag(ecs, e, alerted);
 if (g_has_tag(ecs, e, alerted))
