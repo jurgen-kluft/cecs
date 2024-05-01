@@ -37,23 +37,6 @@ namespace ncore
     static inline entity_t         g_make_entity(entity_ver_t ev, entity_type_id_t et, entity_id_t id) { return (u32)id | ((u32)et<<ECS_ENTITY_TYPE_SHIFT) | ((u32)ev<<ECS_ENTITY_VERSION_SHIFT); }
     // clang-format on
 
-    // [index:12-bit, offset:20-bit]
-    struct index_t
-    {
-        // clang-format off
-        enum { NILL_VALUE = 0xFFFFFFFF, INDEX_MASK = 0xFFF00000, INDEX_SHIFT = 20, OFFSET_MASK = 0x000FFFFF };
-        inline index_t() : m_value(NILL_VALUE) {}
-        inline index_t(u16 index, u32 offset) : m_value((offset & OFFSET_MASK) | ((index << INDEX_SHIFT) & INDEX_MASK)) {}
-        // clang-format on
-
-        inline bool is_null() const { return m_value == NILL_VALUE; }
-        inline u16  get_index() const { return ((m_value & INDEX_MASK) >> INDEX_SHIFT); }
-        inline u32  get_offset() const { return m_value & OFFSET_MASK; }
-        inline void set_index(u16 index) { m_value = (m_value & OFFSET_MASK) | ((index << INDEX_SHIFT) & INDEX_MASK); }
-        inline void set_offset(u32 offset) { m_value = (m_value & INDEX_MASK) | (offset & OFFSET_MASK); }
-        u32         m_value;
-    };
-
     // Component Type Manager
     struct cp_type_mgr_t
     {
@@ -133,9 +116,7 @@ namespace ncore
     // component type, component type manager
     struct cp_nctype_t
     {
-        u16         cp_id;
-        u16         dummy;
-        u32         cp_sizeof;
+        s32         cp_sizeof;
         const char* cp_name;
     };
 
@@ -153,20 +134,18 @@ namespace ncore
         g_hbb_init(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, 1);
     }
 
-    static cp_type_t* s_register_cp_type(cp_type_mgr_t* cps, u32 cp_sizeof, const char* name)
+    static void s_register_cp_type(cp_type_mgr_t* cps, cp_type_t* cp_type)
     {
-        u32 cp_id;
-        if (g_hbb_find(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, cp_id))
+        u32 cp_id = cp_type->cp_id;
+        if (cp_id >= 0 || g_hbb_find(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, cp_id))
         {
+            ASSERTS(cp_id < cp_type_mgr_t::COMPONENTS_MAX, "Component type id is out of bounds");
             cp_nctype_t* cp_type = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
-            cp_type->cp_id       = cp_id;
-            cp_type->cp_sizeof   = cp_sizeof;
-            cp_type->cp_name     = name;
+            cp_type->cp_sizeof   = cp_type->cp_sizeof;
+            cp_type->cp_name     = cp_type->cp_name;
 
             g_hbb_clr(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, cp_id);
-            return ((cp_type_t*)cp_type);
         }
-        return nullptr;
     }
 
     static cp_type_t* s_get_cp_type(cp_type_mgr_t* cps, u32 cp_id)
@@ -188,7 +167,6 @@ namespace ncore
 
     struct tg_nctype_t
     {
-        u32         tg_id;
         const char* tg_name;
     };
 
@@ -206,19 +184,17 @@ namespace ncore
         g_hbb_init(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, 1);
     }
 
-    static tg_type_t* s_register_tag_type(tg_type_mgr_t* ts, const char* name)
+    static void s_register_tag_type(tg_type_mgr_t* ts, tg_type_t* tg_type)
     {
-        u32 tg_id;
-        if (g_hbb_find(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, tg_id))
+        u32 tg_id = tg_type->tg_id;
+        if (tg_id >= 0 || g_hbb_find(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, tg_id))
         {
+            ASSERTS(tg_id < tg_type_mgr_t::TAGS_MAX, "Tag type id is out of bounds");
             tg_nctype_t* tg_type = (tg_nctype_t*)&ts->m_a_tg_type[tg_id];
-            tg_type->tg_id       = tg_id;
-            tg_type->tg_name     = name;
+            tg_type->tg_name     = tg_type->tg_name;
 
             g_hbb_clr(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, tg_id);
-            return ((tg_type_t*)tg_type);
         }
-        return nullptr;
     }
 
     static tg_type_t* s_get_tg_type(tg_type_mgr_t* cps, u32 tg_id)
@@ -241,7 +217,7 @@ namespace ncore
     static void s_clear(en_type_t* et)
     {
         et->m_en_type_id      = 0;
-        et->m_max_entities            = 0;
+        et->m_max_entities    = 0;
         et->m_a_cp_store_hbb  = nullptr;
         et->m_a_cp_store      = nullptr;
         et->m_a_tg_hbb        = nullptr;
@@ -282,7 +258,7 @@ namespace ncore
             en_type_t*& et = s_get_entity_type(es, entity_type_id);
             et             = (en_type_t*)allocator->allocate(sizeof(en_type_t));
 
-            et->m_en_type_id = entity_type_id;
+            et->m_en_type_id   = entity_type_id;
             et->m_max_entities = max_entities;
 
             et->m_a_cp_store_hbb = (hbb_data_t*)allocator->allocate(sizeof(hbb_data_t) * cp_type_mgr_t::COMPONENTS_MAX);
@@ -440,8 +416,8 @@ namespace ncore
     en_type_t* g_register_entity_type(ecs_t* r, u32 max_entities) { return s_register_entity_type(&r->m_entity_type_store, max_entities, r->m_allocator); }
     void       g_unregister_entity_type(ecs_t* r, en_type_t* et) { s_unregister_entity_type(&r->m_entity_type_store, et, r->m_allocator); }
 
-    cp_type_t* g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cp_name) { return s_register_cp_type(&r->m_component_store, cp_sizeof, cp_name); }
-    tg_type_t* g_register_tag_type(ecs_t* r, const char* tg_name) { return s_register_tag_type(&r->m_tag_type_store, tg_name); }
+    void g_register_component_type(ecs_t* r, cp_type_t* cp_type) { return s_register_cp_type(&r->m_component_store, cp_type); }
+    void g_register_tag_type(ecs_t* r, tg_type_t* tg_type) { return s_register_tag_type(&r->m_tag_type_store, tg_type); }
 
     // --------------------------------------------------------------------------------------------------------
     // entity functionality

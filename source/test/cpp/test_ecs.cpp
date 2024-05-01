@@ -7,26 +7,27 @@
 namespace ncore
 {
     // You can make components that are just system types, in this case just a byte
-    template <> inline const char* nameof<u8>() { return "u8"; }
+
+    cp_type_t byte_cp_type = { -1, sizeof(u8), "byte" };
 
     struct position_t
     {
         f32 x, y, z;
     };
-    template <> inline const char* nameof<position_t>() { return "position"; }
+    cp_type_t position_cp_type = { -1, sizeof(position_t), "position" };
 
     struct velocity_t
     {
         f32 x, y, z;
         f32 speed;
     };
-    template <> inline const char* nameof<velocity_t>() { return "velocity"; }
+    cp_type_t velocity_cp_type = { -1, sizeof(velocity_t), "velocity" };
 
     struct physics_state_t
     {
         bool at_rest;
     };
-    template <> inline const char* nameof<physics_state_t>() { return "physics-state"; }
+    cp_type_t physics_state_type = { -1, sizeof(physics_state_t), "physics_state" };
 
 } // namespace ncore
 
@@ -57,32 +58,33 @@ UNITTEST_SUITE_BEGIN(ecs)
         {
             ecs_t* ecs = g_create_ecs(context_t::system_alloc());
 
-            cp_type_t* bytecmp = g_register_component_type<u8>(ecs);
-            cp_type_t* poscmp  = g_register_component_type<position_t>(ecs);
-            cp_type_t* velcmp  = g_register_component_type<velocity_t>(ecs);
+            g_register_component_type(ecs, &byte_cp_type);
+            g_register_component_type(ecs, &position_cp_type);
+            g_register_component_type(ecs, &velocity_cp_type);
 
-			CHECK_EQUAL(0, bytecmp->cp_id);
-			CHECK_EQUAL(1, poscmp->cp_id);
-			CHECK_EQUAL(2, velcmp->cp_id);
+			CHECK_EQUAL(0, byte_cp_type.cp_id);
+			CHECK_EQUAL(1, position_cp_type.cp_id);
+			CHECK_EQUAL(2, velocity_cp_type.cp_id);
 
             g_destroy_ecs(ecs);
         }
 
-		struct friendly {};
-		struct target {};
-		struct dirty {};
+		tg_type_t friendly = { -1, "friendly" };
+		tg_type_t enemy_tag = { -1, "enemy_tag" };
+		tg_type_t target = { -1, "target" };
+		tg_type_t dirty = { -1, "dirty" };
 
 		UNITTEST_TEST(register_tag_types)
 		{
 			ecs_t* ecs = g_create_ecs(context_t::system_alloc());
 
-			tg_type_t* acmp  = g_register_tag_type<friendly>(ecs);
-			tg_type_t* bcmp  = g_register_tag_type<target>(ecs);
-			tg_type_t* ccmp  = g_register_tag_type<dirty>(ecs);
+			g_register_tag_type(ecs, &friendly);
+			g_register_tag_type(ecs, &target);
+			g_register_tag_type(ecs, &dirty);
 
-			CHECK_EQUAL(0, acmp->tg_id);
-			CHECK_EQUAL(1, bcmp->tg_id);
-			CHECK_EQUAL(2, ccmp->tg_id);
+			CHECK_EQUAL(0, friendly.tg_id);
+			CHECK_EQUAL(1, target.tg_id);
+			CHECK_EQUAL(2, dirty.tg_id);
 
 			g_destroy_ecs(ecs);
 		}
@@ -129,12 +131,13 @@ UNITTEST_SUITE_BEGIN(ecs)
             ecs_t* ecs = g_create_ecs(context_t::system_alloc());
 
             en_type_t* ent0    = g_register_entity_type(ecs, 1024);
-            cp_type_t* bytecmp = g_register_component_type<u8>(ecs);
+            
+            g_register_component_type(ecs, &byte_cp_type);
 
             entity_t e01 = g_create_entity(ecs, ent0);
-            g_set_cp(ecs, e01, bytecmp);
+            g_set_cp(ecs, e01, &byte_cp_type);
 
-            CHECK_TRUE(g_has_cp(ecs, e01, bytecmp));
+            CHECK_TRUE(g_has_cp(ecs, e01, &byte_cp_type));
 
             g_delete_entity(ecs, e01);
             g_destroy_ecs(ecs);
@@ -149,14 +152,14 @@ UNITTEST_SUITE_BEGIN(ecs)
             ecs_t* ecs = g_create_ecs(context_t::system_alloc());
 
             en_type_t* ent0  = g_register_entity_type(ecs, 1024);
-            tg_type_t* enemy = g_register_tag_type<enemy_tag_t>(ecs);
+            g_register_tag_type(ecs, &enemy_tag);
 
             entity_t e01 = g_create_entity(ecs, ent0);
-            g_set_tag(ecs, e01, enemy);
+            g_set_tag(ecs, e01, &enemy_tag);
 
-            CHECK_TRUE(g_has_tag(ecs, e01, enemy));
+            CHECK_TRUE(g_has_tag(ecs, e01, &enemy_tag));
 
-            g_rem_tag(ecs, e01, enemy);
+            g_rem_tag(ecs, e01, &enemy_tag);
 
             g_delete_entity(ecs, e01);
             g_destroy_ecs(ecs);
@@ -167,45 +170,45 @@ UNITTEST_SUITE_BEGIN(ecs)
             ecs_t* ecs = g_create_ecs(context_t::system_alloc());
 
             en_type_t* ent0  = g_register_entity_type(ecs, 1024);
-            cp_type_t* bytecmp = g_register_component_type<u8>(ecs);
-            cp_type_t* poscmp  = g_register_component_type<position_t>(ecs);
-            cp_type_t* velcmp  = g_register_component_type<velocity_t>(ecs);
-            tg_type_t* enemy = g_register_tag_type<enemy_tag_t>(ecs);
+            g_register_component_type(ecs, &byte_cp_type);
+            g_register_component_type(ecs, &position_cp_type);
+            g_register_component_type(ecs, &velocity_cp_type);
+            g_register_tag_type(ecs, &enemy_tag);
 
             entity_t   e01  = g_create_entity(ecs, ent0);
             entity_t   e02  = g_create_entity(ecs, ent0);
             entity_t   e03  = g_create_entity(ecs, ent0);
             entity_t   e04  = g_create_entity(ecs, ent0);
 
-            g_set_cp(ecs, e01, bytecmp);
-            g_set_cp(ecs, e03, bytecmp);
-            g_set_cp(ecs, e04, bytecmp);
+            g_set_cp(ecs, e01, &byte_cp_type);
+            g_set_cp(ecs, e03, &byte_cp_type);
+            g_set_cp(ecs, e04, &byte_cp_type);
 
-            g_set_cp(ecs, e01, poscmp);
-            g_set_cp(ecs, e03, poscmp);
+            g_set_cp(ecs, e01, &position_cp_type);
+            g_set_cp(ecs, e03, &position_cp_type);
 
-            g_set_cp(ecs, e01, velcmp);
-            g_set_cp(ecs, e03, velcmp);
+            g_set_cp(ecs, e01, &velocity_cp_type);
+            g_set_cp(ecs, e03, &velocity_cp_type);
 
-            g_set_tag(ecs, e01, enemy);
-            g_set_tag(ecs, e02, enemy);
-            g_set_tag(ecs, e03, enemy);
+            g_set_tag(ecs, e01, &enemy_tag);
+            g_set_tag(ecs, e02, &enemy_tag);
+            g_set_tag(ecs, e03, &enemy_tag);
 
             en_iterator_t iter;
             iter.initialize(ecs);
 
-            iter.cp_type(bytecmp);
-            iter.cp_type(poscmp);
-            iter.tg_type(enemy);
+            iter.cp_type(&byte_cp_type);
+            iter.cp_type(&position_cp_type);
+            iter.tg_type(&enemy_tag);
 
             iter.begin();
             while (!iter.end())
             {
                 entity_t e = iter.item();
 
-                CHECK_TRUE(g_has_cp(ecs, e, bytecmp));
-                CHECK_TRUE(g_has_cp(ecs, e, poscmp));
-                CHECK_TRUE(g_has_tag(ecs, e, enemy));
+                CHECK_TRUE(g_has_cp(ecs, e, &byte_cp_type));
+                CHECK_TRUE(g_has_cp(ecs, e, &position_cp_type));
+                CHECK_TRUE(g_has_tag(ecs, e, &enemy_tag));
 
                 iter.next();
             }
