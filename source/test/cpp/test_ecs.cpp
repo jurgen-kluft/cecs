@@ -8,26 +8,21 @@ namespace ncore
 {
     // You can make components that are just system types, in this case just a byte
 
-    cp_type_t byte_cp_type = { -1, sizeof(u8), "byte" };
-
     struct position_t
     {
         f32 x, y, z;
     };
-    cp_type_t position_cp_type = { -1, sizeof(position_t), "position" };
 
     struct velocity_t
     {
         f32 x, y, z;
         f32 speed;
     };
-    cp_type_t velocity_cp_type = { -1, sizeof(velocity_t), "velocity" };
 
     struct physics_state_t
     {
         bool at_rest;
     };
-    cp_type_t physics_state_type = { -1, sizeof(physics_state_t), "physics_state" };
 
 } // namespace ncore
 
@@ -58,36 +53,40 @@ UNITTEST_SUITE_BEGIN(ecs)
         {
             ecs_t* ecs = g_create_ecs(context_t::system_alloc());
 
+            cp_type_t byte_cp_type     = {-1, sizeof(u8), "byte"};
+            cp_type_t position_cp_type = {-1, sizeof(position_t), "position"};
+            cp_type_t velocity_cp_type = {-1, sizeof(velocity_t), "velocity"};
+
             g_register_component_type(ecs, &byte_cp_type);
             g_register_component_type(ecs, &position_cp_type);
             g_register_component_type(ecs, &velocity_cp_type);
 
-			CHECK_EQUAL(0, byte_cp_type.cp_id);
-			CHECK_EQUAL(1, position_cp_type.cp_id);
-			CHECK_EQUAL(2, velocity_cp_type.cp_id);
+            CHECK_EQUAL(0, byte_cp_type.cp_id);
+            CHECK_EQUAL(1, position_cp_type.cp_id);
+            CHECK_EQUAL(2, velocity_cp_type.cp_id);
 
             g_destroy_ecs(ecs);
         }
 
-		tg_type_t friendly = { -1, "friendly" };
-		tg_type_t enemy_tag = { -1, "enemy_tag" };
-		tg_type_t target = { -1, "target" };
-		tg_type_t dirty = { -1, "dirty" };
+        UNITTEST_TEST(register_tag_types)
+        {
+            ecs_t* ecs = g_create_ecs(context_t::system_alloc());
 
-		UNITTEST_TEST(register_tag_types)
-		{
-			ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+            tg_type_t friendly  = {-1, "friendly"};
+            tg_type_t enemy_tag = {-1, "enemy_tag"};
+            tg_type_t target    = {-1, "target"};
+            tg_type_t dirty     = {-1, "dirty"};
 
-			g_register_tag_type(ecs, &friendly);
-			g_register_tag_type(ecs, &target);
-			g_register_tag_type(ecs, &dirty);
+            g_register_tag_type(ecs, &friendly);
+            g_register_tag_type(ecs, &target);
+            g_register_tag_type(ecs, &dirty);
 
-			CHECK_EQUAL(0, friendly.tg_id);
-			CHECK_EQUAL(1, target.tg_id);
-			CHECK_EQUAL(2, dirty.tg_id);
+            CHECK_EQUAL(0, friendly.tg_id);
+            CHECK_EQUAL(1, target.tg_id);
+            CHECK_EQUAL(2, dirty.tg_id);
 
-			g_destroy_ecs(ecs);
-		}
+            g_destroy_ecs(ecs);
+        }
 
         UNITTEST_TEST(create_entities_in_one_entity_type)
         {
@@ -114,11 +113,11 @@ UNITTEST_SUITE_BEGIN(ecs)
             en_type_t* ent0 = g_register_entity_type(ecs, 1024);
 
             entity_t entities[512];
-            for (s32 i=0; i<512; ++i)
+            for (s32 i = 0; i < 512; ++i)
             {
                 entities[i] = g_create_entity(ecs, ent0);
             }
-            for (s32 i=0; i<512; ++i)
+            for (s32 i = 0; i < 512; ++i)
             {
                 g_delete_entity(ecs, entities[i]);
             }
@@ -130,8 +129,10 @@ UNITTEST_SUITE_BEGIN(ecs)
         {
             ecs_t* ecs = g_create_ecs(context_t::system_alloc());
 
-            en_type_t* ent0    = g_register_entity_type(ecs, 1024);
-            
+            en_type_t* ent0 = g_register_entity_type(ecs, 1024);
+
+            cp_type_t byte_cp_type     = {-1, sizeof(u8), "byte"};
+
             g_register_component_type(ecs, &byte_cp_type);
 
             entity_t e01 = g_create_entity(ecs, ent0);
@@ -151,7 +152,9 @@ UNITTEST_SUITE_BEGIN(ecs)
         {
             ecs_t* ecs = g_create_ecs(context_t::system_alloc());
 
-            en_type_t* ent0  = g_register_entity_type(ecs, 1024);
+            tg_type_t enemy_tag = {-1, "enemy_tag"};
+
+            en_type_t* ent0 = g_register_entity_type(ecs, 1024);
             g_register_tag_type(ecs, &enemy_tag);
 
             entity_t e01 = g_create_entity(ecs, ent0);
@@ -169,16 +172,22 @@ UNITTEST_SUITE_BEGIN(ecs)
         {
             ecs_t* ecs = g_create_ecs(context_t::system_alloc());
 
-            en_type_t* ent0  = g_register_entity_type(ecs, 1024);
+            cp_type_t byte_cp_type     = {-1, sizeof(u8), "byte"};
+            cp_type_t position_cp_type = {-1, sizeof(position_t), "position"};
+            cp_type_t velocity_cp_type = {-1, sizeof(velocity_t), "velocity"};
+
+            en_type_t* ent0 = g_register_entity_type(ecs, 1024);
             g_register_component_type(ecs, &byte_cp_type);
             g_register_component_type(ecs, &position_cp_type);
             g_register_component_type(ecs, &velocity_cp_type);
+
+            tg_type_t enemy_tag = {-1, "enemy_tag"};
             g_register_tag_type(ecs, &enemy_tag);
 
-            entity_t   e01  = g_create_entity(ecs, ent0);
-            entity_t   e02  = g_create_entity(ecs, ent0);
-            entity_t   e03  = g_create_entity(ecs, ent0);
-            entity_t   e04  = g_create_entity(ecs, ent0);
+            entity_t e01 = g_create_entity(ecs, ent0);
+            entity_t e02 = g_create_entity(ecs, ent0);
+            entity_t e03 = g_create_entity(ecs, ent0);
+            entity_t e04 = g_create_entity(ecs, ent0);
 
             g_set_cp(ecs, e01, &byte_cp_type);
             g_set_cp(ecs, e03, &byte_cp_type);
