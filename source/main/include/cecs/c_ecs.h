@@ -13,6 +13,14 @@ namespace ncore
     struct ecs_t;
 
     // Component Type - identifier information
+    // Note: These should be registered as static variables in header files and defined in source files
+    // Example: 
+    // .h   file -> extern cp_type_t* g_position_cp_type;
+
+    //    cp_type_t* g_position_cp_type = nullptr;
+    //    template <> const char* nameof<PositionComponent>() { return "PositionComponent"; }
+    // Register components from an initialization function, e.g.
+    //    cp_type_t* g_position_cp_type = g_register_component_type<PositionComponent>(g_ecs);
     struct cp_type_t
     {
         u16 const         cp_id;
@@ -38,6 +46,7 @@ namespace ncore
     extern void       g_delete_entity(ecs_t* ecs, entity_t entity);
 
     // Registers a component type and returns its type information
+    // Note: Do not register the same 
     template <typename T> inline const char* nameof() { return "?"; }
     extern cp_type_t*                        g_register_component_type(ecs_t* r, u32 cp_sizeof, const char* cp_name);
     template <typename T> cp_type_t*         g_register_component_type(ecs_t* r) { return g_register_component_type(r, sizeof(T), nameof<T>()); }
