@@ -27,8 +27,9 @@ namespace ncore
 } // namespace ncore
 
 using namespace ncore;
+using namespace ncore::necs;
 
-UNITTEST_SUITE_BEGIN(ecs)
+UNITTEST_SUITE_BEGIN(necs)
 {
     UNITTEST_FIXTURE(ecs)
     {
