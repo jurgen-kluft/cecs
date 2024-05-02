@@ -99,10 +99,10 @@ UNITTEST_SUITE_BEGIN(necs)
             entity_t   e03  = g_create_entity(ecs, ent0);
             entity_t   e04  = g_create_entity(ecs, ent0);
 
-            g_delete_entity(ecs, e01);
-            g_delete_entity(ecs, e02);
-            g_delete_entity(ecs, e03);
-            g_delete_entity(ecs, e04);
+            g_destroy_entity(ecs, e01);
+            g_destroy_entity(ecs, e02);
+            g_destroy_entity(ecs, e03);
+            g_destroy_entity(ecs, e04);
 
             g_destroy_ecs(ecs);
         }
@@ -120,7 +120,7 @@ UNITTEST_SUITE_BEGIN(necs)
             }
             for (s32 i = 0; i < 512; ++i)
             {
-                g_delete_entity(ecs, entities[i]);
+                g_destroy_entity(ecs, entities[i]);
             }
 
             g_destroy_ecs(ecs);
@@ -141,7 +141,7 @@ UNITTEST_SUITE_BEGIN(necs)
 
             CHECK_TRUE(g_has_cp(ecs, e01, &byte_cp_type));
 
-            g_delete_entity(ecs, e01);
+            g_destroy_entity(ecs, e01);
             g_destroy_ecs(ecs);
         }
 
@@ -165,7 +165,7 @@ UNITTEST_SUITE_BEGIN(necs)
 
             g_rem_tag(ecs, e01, &enemy_tag);
 
-            g_delete_entity(ecs, e01);
+            g_destroy_entity(ecs, e01);
             g_destroy_ecs(ecs);
         }
 
@@ -223,10 +223,10 @@ UNITTEST_SUITE_BEGIN(necs)
                 iter.next();
             }
 
-            g_delete_entity(ecs, e01);
-            g_delete_entity(ecs, e02);
-            g_delete_entity(ecs, e03);
-            g_delete_entity(ecs, e04);
+            g_destroy_entity(ecs, e01);
+            g_destroy_entity(ecs, e02);
+            g_destroy_entity(ecs, e03);
+            g_destroy_entity(ecs, e04);
             g_destroy_ecs(ecs);
         }
     }

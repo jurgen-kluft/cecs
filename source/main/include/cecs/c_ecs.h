@@ -39,7 +39,7 @@ namespace ncore
         extern en_type_t* g_register_entity_type(ecs_t* r, u32 max_entities);
         extern void       g_unregister_entity_type(ecs_t* r, en_type_t*);
         extern entity_t   g_create_entity(ecs_t* ecs, en_type_t* en_type);
-        extern void       g_delete_entity(ecs_t* ecs, entity_t entity);
+        extern void       g_destroy_entity(ecs_t* ecs, entity_t entity);
 
         // Registers a component type and returns its type information
         // Note: Do not register the same

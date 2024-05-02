@@ -314,7 +314,7 @@ namespace ncore
             return g_null_entity;
         }
 
-        static void s_delete_entity(cp_type_mgr_t* cps, en_type_t* et, entity_t e)
+        static void s_destroy_entity(cp_type_mgr_t* cps, en_type_t* et, entity_t e)
         {
             if (s_is_registered(et))
             {
@@ -512,11 +512,11 @@ namespace ncore
 
         entity_t g_create_entity(ecs_t* es, en_type_t* et) { return s_create_entity(et); }
 
-        void g_delete_entity(ecs_t* ecs, entity_t e)
+        void g_destroy_entity(ecs_t* ecs, entity_t e)
         {
             entity_type_id_t const en_type_id  = g_entity_type_id(e);
             en_type_t*             entity_type = s_get_entity_type(&ecs->m_entity_type_store, en_type_id);
-            s_delete_entity(&ecs->m_component_store, entity_type, e);
+            s_destroy_entity(&ecs->m_component_store, entity_type, e);
         }
 
         bool  g_has_cp(ecs_t* ecs, entity_t entity, cp_type_t* cp_type) { return s_entity_has_component(ecs, entity, *cp_type); }

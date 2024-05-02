@@ -29,7 +29,7 @@ en_type_t* en_type_go = g_register_entity_type(ecs, 1024);
 
 // Create/Delete entity
 entity_t e = g_create_entity(ecs, en_type_go);
-g_delete_entity(ecs, e);
+g_destroy_entity(ecs, e);
 
 // Components
 struct position_t

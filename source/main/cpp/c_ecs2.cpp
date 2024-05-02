@@ -3,7 +3,6 @@
 #include "ccore/c_debug.h"
 #include "cbase/c_hbb.h"
 #include "cbase/c_integer.h"
-#include "cbase/c_memory.h"
 
 #include "cecs/c_ecs2.h"
 
@@ -13,13 +12,12 @@ namespace ncore
     {
         const entity_t g_null_entity = (entity_t)0xFFFFFFFF;
 
-        typedef u8  entity_gen_id_t;
-        typedef u32 entity_id_t;
+        typedef u8 entity_gen_id_t;
 
-        const u32 ECS_ENTITY_ID_MASK       = (0x00FFFFFF); // Mask to use to get the entity number out of an identifier
-        const u32 ECS_ENTITY_GEN_ID_MASK   = (0xFF000000); // Mask to use to get the generation id out of an identifier
-        const u32 ECS_ENTITY_GEN_ID_MAX    = (0x000000FF); // Maximum generation id
-        const s8  ECS_ENTITY_VERSION_SHIFT = (24);         // Extent of the entity id + type within an identifier
+        const u32 ECS_ENTITY_INDEX_MASK  = (0x00FFFFFF); // Mask to use to get the entity number out of an identifier
+        const u32 ECS_ENTITY_GEN_ID_MASK = (0xFF000000); // Mask to use to get the generation id out of an identifier
+        const u32 ECS_ENTITY_GEN_ID_MAX  = (0x000000FF); // Maximum generation id
+        const s8  ECS_ENTITY_GEN_SHIFT   = (24);         // Extent of the entity id + type within an identifier
 
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
@@ -28,9 +26,9 @@ namespace ncore
 
         struct cp_type_t;
 
-        static inline entity_gen_id_t s_entity_gen_id(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_VERSION_SHIFT; }
-        static inline entity_id_t     s_entity_index(entity_t e) { return (u32)e & ECS_ENTITY_ID_MASK; }
-        static inline entity_t        s_make_entity(entity_gen_id_t ev, entity_id_t id) { return ((u32)ev << ECS_ENTITY_VERSION_SHIFT) | (u32)id; }
+        static inline entity_gen_id_t s_entity_gen(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_SHIFT; }
+        static inline u32             s_entity_index(entity_t e) { return (u32)e & ECS_ENTITY_INDEX_MASK; }
+        static inline entity_t        s_make_entity(entity_gen_id_t gen, u32 id) { return ((u32)gen << ECS_ENTITY_GEN_SHIFT) | (id & ECS_ENTITY_INDEX_MASK); }
 
         struct cp_nctype_t
         {
@@ -59,11 +57,22 @@ namespace ncore
             hbb_data_t m_en_hbb_data;      // For iteration, which entities are used
             u32        m_max_entities;     // Maximum number of entities in this group
             u32        m_cp_used;          // Each bit represents if for this group the component is free or used
-            hbb_hdr_t  m_en_cp_hbb_hdr;    // The header for the hbb data, this is used to keep track of which components are still free
-            hbb_data_t m_en_cp_hbb_data;   // Which component indices are still free
             byte*      m_a_en_cp_data[32]; // The component data array per component type
+            alloc_t*   m_allocator;        // The allocator
             u8         m_group_index;
         };
+
+        static void s_cp_group_construct(cp_group_t* group, s8 index)
+        {
+            group->m_en_hbb_hdr   = hbb_hdr_t();
+            group->m_en_hbb_data  = nullptr;
+            group->m_max_entities = 0;
+            group->m_cp_used      = 0;
+            for (u32 i = 0; i < 32; ++i)
+                group->m_a_en_cp_data[i] = nullptr;
+            group->m_allocator   = nullptr;
+            group->m_group_index = index;
+        }
 
         static s8 s_cp_group_register_cp(cp_group_t* group)
         {
@@ -72,7 +81,7 @@ namespace ncore
             {
                 group->m_cp_used |= (1 << cp_id);
 
-                // Allocate the component data array etc...
+                // TODO Allocate the component data array etc...
 
                 return (s8)cp_id;
             }
@@ -82,10 +91,8 @@ namespace ncore
         static void s_cp_group_unregister_cp(cp_group_t* group, s8 cp_index)
         {
             ASSERT(cp_index >= 0 && cp_index < 32);
-
             group->m_cp_used &= ~(1 << cp_index);
-
-            // Deallocate the component data array etc...
+            group->m_allocator->deallocate(group->m_a_en_cp_data[cp_index]);
         }
 
         // Component Type Manager
@@ -96,6 +103,9 @@ namespace ncore
             cp_nctype_t* m_a_cp_type;   // 8 bytes; The type information attached to each store
         };
 
+        // Component Group Manager
+        // Note that we can have a maximum of 64 component groups, each component group can have a maximum of 32 components.
+        // So in total we can handle 64 * 32 = 2048 components.
         struct cp_group_mgr_t
         {
             u32         m_cp_groups_max;  // Maximum number of component groups
@@ -103,8 +113,8 @@ namespace ncore
             cp_group_t* m_cp_groups;      // The array of component groups
         };
 
-        // Entity data
-        // Note: This setup limits and entity to 7 component groups (so a maximum of 224 components per entity)
+        // Entity data structure
+        // Note that this setup limits an entity to 7 component groups (so a maximum of 224 components per entity)
         struct eentity_t
         {
             u64 m_cp_groups;            // Global maximum of 64 component groups, each bit represents a group index (bit 0 is group 0, bit 3 is group 3 etc..)
@@ -181,7 +191,7 @@ namespace ncore
         // tag type, tag type manager
 
         static cp_type_t* s_register_tag_type(cp_type_mgr_t* ts, const char* cp_name, cp_group_t* cp_group) { return s_register_cp_type(ts, cp_name, 0, cp_group); }
-        static void s_unregister_tg_type(cp_type_mgr_t* cps, cp_type_t* cp_type, cp_group_mgr_t* cp_group_mgr) { s_unregister_cp_type(cps, cp_type, cp_group_mgr); }
+        static void       s_unregister_tg_type(cp_type_mgr_t* cps, cp_type_t* cp_type, cp_group_mgr_t* cp_group_mgr) { s_unregister_cp_type(cps, cp_type, cp_group_mgr); }
 
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
@@ -191,8 +201,13 @@ namespace ncore
         static void s_init(cp_group_mgr_t* cp_group_mgr, u32 max_groups, alloc_t* allocator)
         {
             ASSERT(max_groups > 0 && max_groups <= 64);
-            cp_group_mgr->m_cp_groups_max  = max_groups;
-            cp_group_mgr->m_cp_groups      = (cp_group_t*)allocator->allocate(sizeof(cp_group_t) * max_groups);
+            cp_group_mgr->m_cp_groups_max = max_groups;
+            cp_group_mgr->m_cp_groups     = (cp_group_t*)allocator->allocate(sizeof(cp_group_t) * max_groups);
+            for (u32 i = 0; i < max_groups; ++i)
+            {
+                cp_group_t* group = &cp_group_mgr->m_cp_groups[i];
+                s_cp_group_construct(group, i);
+            }
             cp_group_mgr->m_cp_groups_used = 0;
         }
 
@@ -288,12 +303,12 @@ namespace ncore
             s8 const           cp_group_index    = s_get_cp_type_cp_group_index(cp_nctype->cp_data);
             s8 const           cp_group_cp_index = s_get_cp_type_cp_group_cp_index(cp_nctype->cp_data);
 
-            eentity_t& entity = ecs->m_entity_mgr.m_a_entity[s_entity_index(e)];
-            if (entity.m_cp_groups & (1 << cp_group_index))
+            eentity_t& entity       = ecs->m_entity_mgr.m_a_entity[s_entity_index(e)];
+            u32 const  cp_group_bit = (1 << cp_group_index);
+            if (entity.m_cp_groups & cp_group_bit)
             {
-                // How many '1' bits are there before in 'm_cp_group_cp_used'
-                u32 const gb      = entity.m_cp_groups & ((1 << cp_group_index) - 1);
-                s8 const  gi      = math::countBits(gb);
+                // How many '1' bits are there before 'cp_group_bit' in 'm_cp_groups'
+                u32 const gi      = math::countBits(entity.m_cp_groups & (cp_group_bit - 1));
                 u32 const cp_used = entity.m_cp_group_cp_used[gi];
                 return (cp_used & (1 << cp_group_cp_index)) != 0;
             }
@@ -308,11 +323,11 @@ namespace ncore
 
             u32 const  en_idx = s_entity_index(e);
             eentity_t& entity = ecs->m_entity_mgr.m_a_entity[en_idx];
-            if (entity.m_cp_groups & (1 << cp_group_index))
+            u32 const  cp_group_bit = (1 << cp_group_index);
+            if (entity.m_cp_groups & cp_group_bit)
             {
                 // How many '1' bits are there before in 'm_cp_group_cp_used'
-                u32 const gb      = entity.m_cp_groups & ((1 << cp_group_index) - 1);
-                s8 const  gi      = math::countBits(gb);
+                u32 const gi      = math::countBits(entity.m_cp_groups & (cp_group_bit - 1));
                 u32 const cp_used = entity.m_cp_group_cp_used[gi];
                 if (cp_used & (1 << cp_group_cp_index))
                 {
@@ -339,6 +354,9 @@ namespace ncore
                 s8 const  gi      = math::countBits(gb);
                 u32&      cp_used = entity.m_cp_group_cp_used[gi];
                 cp_used |= (1 << cp_group_cp_index);
+
+                // TODO Initialize the component in the component group if it is a component.
+                //      If it is a tag, we do not need to do anything.
             }
             else
             {
@@ -363,6 +381,9 @@ namespace ncore
                 s8 const  gi      = math::countBits(gb);
                 u32&      cp_used = entity.m_cp_group_cp_used[gi];
                 cp_used &= ~(1 << cp_group_cp_index);
+
+                // TODO Remove the component in the component group if it is a component.
+                //      If it is a tag, we do not need to do anything.
             }
         }
 
@@ -389,7 +410,7 @@ namespace ncore
 
         void g_destroy_entity(ecs_t* ecs, entity_t e)
         {
-            entity_gen_id_t const gen_id = s_entity_gen_id(e);
+            entity_gen_id_t const gen_id = s_entity_gen(e);
             entity_gen_id_t const cur_id = ecs->m_entity_mgr.m_a_entity_ver[s_entity_index(e)];
             // NOTE Do we verify the generation id and if it doesn't match we do not delete the entity?
             if (gen_id != cur_id)
