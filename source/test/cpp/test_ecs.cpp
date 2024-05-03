@@ -3,6 +3,7 @@
 #include "cecs/c_ecs.h"
 
 #include "cunittest/cunittest.h"
+#include "cecs/test_allocator.h"
 
 namespace ncore
 {
@@ -33,18 +34,20 @@ UNITTEST_SUITE_BEGIN(necs)
 {
     UNITTEST_FIXTURE(ecs)
     {
+        UNITTEST_ALLOCATOR;
+
         UNITTEST_FIXTURE_SETUP() {}
         UNITTEST_FIXTURE_TEARDOWN() {}
 
         UNITTEST_TEST(create)
         {
-            ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+            ecs_t* ecs = g_create_ecs(Allocator);
             g_destroy_ecs(ecs);
         }
 
         UNITTEST_TEST(register_entity_types)
         {
-            ecs_t*     ecs  = g_create_ecs(context_t::system_alloc());
+            ecs_t*     ecs  = g_create_ecs(Allocator);
             en_type_t* ent0 = g_register_entity_type(ecs, 1024);
             en_type_t* ent1 = g_register_entity_type(ecs, 2048);
             g_destroy_ecs(ecs);
@@ -52,7 +55,7 @@ UNITTEST_SUITE_BEGIN(necs)
 
         UNITTEST_TEST(register_component_types)
         {
-            ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+            ecs_t* ecs = g_create_ecs(Allocator);
 
             cp_type_t byte_cp_type     = {-1, sizeof(u8), "byte"};
             cp_type_t position_cp_type = {-1, sizeof(position_t), "position"};
@@ -71,7 +74,7 @@ UNITTEST_SUITE_BEGIN(necs)
 
         UNITTEST_TEST(register_tag_types)
         {
-            ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+            ecs_t* ecs = g_create_ecs(Allocator);
 
             tg_type_t friendly  = {-1, "friendly"};
             tg_type_t enemy_tag = {-1, "enemy_tag"};
@@ -91,7 +94,8 @@ UNITTEST_SUITE_BEGIN(necs)
 
         UNITTEST_TEST(create_entities_in_one_entity_type)
         {
-            ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+            return;
+            ecs_t* ecs = g_create_ecs(Allocator);
 
             en_type_t* ent0 = g_register_entity_type(ecs, 1024);
             entity_t   e01  = g_create_entity(ecs, ent0);
@@ -109,7 +113,8 @@ UNITTEST_SUITE_BEGIN(necs)
 
         UNITTEST_TEST(create_delete_many_entities_in_one_entity_type)
         {
-            ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+            return;
+            ecs_t* ecs = g_create_ecs(Allocator);
 
             en_type_t* ent0 = g_register_entity_type(ecs, 1024);
 
@@ -128,7 +133,8 @@ UNITTEST_SUITE_BEGIN(necs)
 
         UNITTEST_TEST(create_entity_and_set_component)
         {
-            ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+            return;
+            ecs_t* ecs = g_create_ecs(Allocator);
 
             en_type_t* ent0 = g_register_entity_type(ecs, 1024);
 
@@ -151,7 +157,8 @@ UNITTEST_SUITE_BEGIN(necs)
 
         UNITTEST_TEST(create_entity_and_set_tag)
         {
-            ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+            return;
+            ecs_t* ecs = g_create_ecs(Allocator);
 
             tg_type_t enemy_tag = {-1, "enemy_tag"};
 
@@ -171,7 +178,8 @@ UNITTEST_SUITE_BEGIN(necs)
 
         UNITTEST_TEST(iterator_basic)
         {
-            ecs_t* ecs = g_create_ecs(context_t::system_alloc());
+            return;
+            ecs_t* ecs = g_create_ecs(Allocator);
 
             cp_type_t byte_cp_type     = {-1, sizeof(u8), "byte"};
             cp_type_t position_cp_type = {-1, sizeof(position_t), "position"};

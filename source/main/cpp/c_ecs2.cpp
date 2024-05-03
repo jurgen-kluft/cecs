@@ -48,10 +48,10 @@ namespace ncore
             u32        m_cp_used;          // Each bit represents if for this group the component is free or used
             byte*      m_a_en_cp_data[32]; // The component data array per component type
             alloc_t*   m_allocator;        // The allocator
-            u8         m_group_index;
+            s8         m_group_index;
         };
 
-        static void s_cp_group_construct(cp_group_t* group, s8 index)
+        static void s_cp_group_init(cp_group_t* group)
         {
             group->m_en_hbb_hdr   = hbb_hdr_t();
             group->m_en_hbb_data  = nullptr;
@@ -60,12 +60,38 @@ namespace ncore
             for (u32 i = 0; i < 32; ++i)
                 group->m_a_en_cp_data[i] = nullptr;
             group->m_allocator   = nullptr;
-            group->m_group_index = index;
+            group->m_group_index = -1;
+        }
+
+        static void s_cp_group_construct(cp_group_t* group, s8 index, u32 max_entities, alloc_t* allocator) 
+        { 
+            if (max_entities > 0)
+            {
+                group->m_allocator = allocator;
+                group->m_group_index = index;
+                group->m_max_entities = max_entities;
+                g_hbb_init(group->m_en_hbb_hdr, max_entities);
+                g_hbb_init(group->m_en_hbb_hdr, group->m_en_hbb_data, 1, allocator);
+            }
+        }
+        static void s_cp_group_destruct(cp_group_t* group)
+        {
+            alloc_t* allocator = group->m_allocator;
+            u32 cp_used = group->m_cp_used;
+            while (cp_used != 0)
+            {
+                s32 index = math::findFirstBit(cp_used);
+                if (group->m_a_en_cp_data[index] != nullptr)
+                    allocator->deallocate(group->m_a_en_cp_data[index]);
+                cp_used &= ~(1 << index);
+            }
+            allocator->deallocate(group->m_en_hbb_data);
+            s_cp_group_init(group);
         }
 
         static s8 s_cp_group_register_cp(cp_group_t* group, cp_nctype_t* cp_type)
         {
-            u32 cp_id = math::findFirstBit(group->m_cp_used);
+            s8 const cp_id = math::findFirstBit(~group->m_cp_used);
             if (cp_id >= 0 && cp_id < 32)
             {
                 group->m_cp_used |= (1 << cp_id);
@@ -101,7 +127,8 @@ namespace ncore
         {
             u32         m_cp_groups_max;  // Maximum number of component groups
             u64         m_cp_groups_used; // Bits indicate which groups are used/free
-            cp_group_t* m_cp_groups;      // The array of component groups
+            alloc_t*    m_allocator;
+            cp_group_t* m_cp_groups; // The array of component groups
         };
 
         // Entity data structure (64 bytes)
@@ -136,8 +163,12 @@ namespace ncore
 
         static void s_init(cp_type_mgr_t* cps, u32 max_components, alloc_t* allocator)
         {
+            cps->m_cp_hbb_hdr  = hbb_hdr_t();
+            cps->m_cp_hbb_data = nullptr;
+            cps->m_a_cp_type   = nullptr;
+
             g_hbb_init(cps->m_cp_hbb_hdr, max_components);
-            g_hbb_init(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, 1);
+            g_hbb_init(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, 1, allocator);
             cps->m_a_cp_type = (cp_nctype_t*)allocator->allocate(sizeof(cp_nctype_t) * max_components);
         }
 
@@ -145,11 +176,13 @@ namespace ncore
         {
             allocator->deallocate(cps->m_a_cp_type);
             allocator->deallocate(cps->m_cp_hbb_data);
-            cps->m_a_cp_type   = nullptr;
+
+            cps->m_cp_hbb_hdr  = hbb_hdr_t();
             cps->m_cp_hbb_data = nullptr;
+            cps->m_a_cp_type   = nullptr;
         }
 
-        static cp_type_t*  s_register_cp_type(cp_type_mgr_t* cps, cp_group_t* cp_group, const char* cp_name, s32 cp_sizeof, s32 cp_alignof)
+        static cp_type_t* s_register_cp_type(cp_type_mgr_t* cps, cp_group_t* cp_group, const char* cp_name, s32 cp_sizeof, s32 cp_alignof)
         {
             u32 cp_id = 0;
             if (g_hbb_find(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, cp_id))
@@ -192,32 +225,49 @@ namespace ncore
         static void s_init(cp_group_mgr_t* cp_group_mgr, u32 max_groups, alloc_t* allocator)
         {
             ASSERT(max_groups > 0 && max_groups <= 64);
-            cp_group_mgr->m_cp_groups_max = max_groups;
-            cp_group_mgr->m_cp_groups     = (cp_group_t*)allocator->allocate(sizeof(cp_group_t) * max_groups);
-            for (u32 i = 0; i < max_groups; ++i)
-            {
-                cp_group_t* group = &cp_group_mgr->m_cp_groups[i];
-                s_cp_group_construct(group, i);
-            }
+            cp_group_mgr->m_allocator      = allocator;
+            cp_group_mgr->m_cp_groups_max  = max_groups;
+            cp_group_mgr->m_cp_groups      = (cp_group_t*)allocator->allocate(sizeof(cp_group_t) * max_groups);
             cp_group_mgr->m_cp_groups_used = 0;
-        }
-
-        static cp_group_t* s_register_group(cp_group_mgr_t* cp_group_mgr)
-        {
-            // Find a zero bit in the group used array
-            s8 id = math::findFirstBit(cp_group_mgr->m_cp_groups_used);
-            if (id >= 0 && id < 64)
-            {
-                cp_group_mgr->m_cp_groups_used |= ((u64)1 << id);
-                return &cp_group_mgr->m_cp_groups[id];
-            }
-            return nullptr;
+            for (u32 i = 0; i < max_groups; ++i)
+                s_cp_group_init(&cp_group_mgr->m_cp_groups[i]);
         }
 
         static void s_exit(cp_group_mgr_t* cp_group_mgr, alloc_t* allocator)
         {
+            u32 groups_used = cp_group_mgr->m_cp_groups_used;
+            while (groups_used != 0)
+            {
+                s32 index = math::findFirstBit(groups_used);
+                groups_used &= ~(1 << index);
+                s_cp_group_destruct(&cp_group_mgr->m_cp_groups[index]);
+            }
+
             allocator->deallocate(cp_group_mgr->m_cp_groups);
-            cp_group_mgr->m_cp_groups = nullptr;
+
+            cp_group_mgr->m_cp_groups_max  = 0;
+            cp_group_mgr->m_cp_groups      = nullptr;
+            cp_group_mgr->m_cp_groups_used = 0;
+        }
+
+        static cp_group_t* s_register_group(cp_group_mgr_t* cp_group_mgr, u32 max_entities)
+        {
+            // Find a '0' bit in the group used array
+            s8 const id = math::findFirstBit(~cp_group_mgr->m_cp_groups_used);
+            if (id >= 0 && id < 64)
+            {
+                cp_group_mgr->m_cp_groups_used |= ((u64)1 << id);
+                cp_group_t* group = &cp_group_mgr->m_cp_groups[id];
+                s_cp_group_construct(group, id, max_entities, cp_group_mgr->m_allocator);
+                return group;
+            }
+            return nullptr;
+        }
+
+        static void s_unregister_group(cp_group_mgr_t* cp_group_mgr, cp_group_t* cp_group)
+        {
+            cp_group_mgr->m_cp_groups_used &= ~((u64)1 << cp_group->m_group_index);
+            s_cp_group_init(cp_group);
         }
 
         // --------------------------------------------------------------------------------------------------------
@@ -227,6 +277,9 @@ namespace ncore
 
         static void s_init(entity_mgr_t* entity_mgr, u32 max_entities, alloc_t* allocator)
         {
+            entity_mgr->m_entity_hbb_hdr  = hbb_hdr_t();
+            entity_mgr->m_entity_hbb_data = nullptr;
+
             g_hbb_init(entity_mgr->m_entity_hbb_hdr, max_entities);
             g_hbb_init(entity_mgr->m_entity_hbb_hdr, entity_mgr->m_entity_hbb_data, 1, allocator);
             entity_mgr->m_a_entity_ver = (entity_gen_id_t*)allocator->allocate(sizeof(entity_gen_id_t) * max_entities);
@@ -281,7 +334,7 @@ namespace ncore
             allocator->deallocate(ecs);
         }
 
-        cp_group_t* g_register_cp_group(ecs_t* ecs) { return s_register_group(&ecs->m_cp_group_mgr); }
+        cp_group_t* g_register_cp_group(ecs_t* ecs, u32 max_entities) { return s_register_group(&ecs->m_cp_group_mgr, max_entities); }
         cp_type_t*  g_register_cp_type(ecs_t* r, cp_group_t* cp_group, const char* cp_name, s32 cp_sizeof, s32 cp_alignof) { return s_register_cp_type(&r->m_cp_type_mgr, cp_group, cp_name, cp_sizeof, cp_alignof); }
         cp_type_t*  g_register_tg_type(ecs_t* r, cp_group_t* cp_group, const char* cp_name) { return s_register_tag_type(&r->m_cp_type_mgr, cp_name, cp_group); }
 
@@ -294,9 +347,12 @@ namespace ncore
             s8 const           cp_group_index    = cp_nctype->cp_group_index;
             s8 const           cp_group_cp_index = cp_nctype->cp_group_cp_index;
 
-            eentity_t& entity       = ecs->m_entity_mgr.m_a_entity[s_entity_index(e)];
-            u32 const  cp_group_bit = (1 << cp_group_index);
-            if (entity.m_cp_groups & cp_group_bit)
+            ASSERT(cp_group_index >= 0 && cp_group_index < 64);
+            ASSERT(cp_group_cp_index >= 0 && cp_group_cp_index < 32);
+
+            eentity_t const& entity       = ecs->m_entity_mgr.m_a_entity[s_entity_index(e)];
+            u32 const        cp_group_bit = (1 << cp_group_index);
+            if ((entity.m_cp_groups & cp_group_bit) == cp_group_bit)
             {
                 // How many '1' bits are there before 'cp_group_bit' in 'm_cp_groups'
                 u32 const gi      = math::countBits(entity.m_cp_groups & (cp_group_bit - 1));
@@ -335,29 +391,24 @@ namespace ncore
             cp_nctype_t const* cp_nctype         = (cp_nctype_t*)cp_type;
             s8 const           cp_group_index    = cp_nctype->cp_group_index;
             s8 const           cp_group_cp_index = cp_nctype->cp_group_cp_index;
+            u32 const          c_group_bit       = (1 << cp_group_index);
 
             u32 const  en_idx = s_entity_index(e);
             eentity_t& entity = ecs->m_entity_mgr.m_a_entity[en_idx];
-            if (entity.m_cp_groups & (1 << cp_group_index))
-            {
-                // How many '1' bits are there before in 'm_cp_group_cp_used'
-                u32 const gb      = entity.m_cp_groups & ((1 << cp_group_index) - 1);
-                s8 const  gi      = math::countBits(gb);
-                u32&      cp_used = entity.m_cp_group_cp_used[gi];
-                cp_used |= (1 << cp_group_cp_index);
-
-                // TODO Initialize the component in the component group if it is a component.
-                //      If it is a tag, we do not need to do anything.
-            }
-            else
+            if ((entity.m_cp_groups & c_group_bit) == 0)
             {
                 // An entity can have a maximum of 7 component groups
                 if (math::countBits(entity.m_cp_groups) == 7)
                     return;
 
-                // The incoming component type has a group that is not yet registered?
-                // NOTE Should we auto register ?
+                entity.m_cp_groups |= c_group_bit;
             }
+
+            // How many '1' bits are there before in 'm_cp_group_cp_used'
+            u32 const gb      = entity.m_cp_groups & (c_group_bit - 1);
+            s8 const  gi      = math::countBits(gb);
+            u32&      cp_used = entity.m_cp_group_cp_used[gi];
+            cp_used |= (1 << cp_group_cp_index);
         }
 
         // Remove/detach component from the entity
@@ -395,6 +446,11 @@ namespace ncore
             {
                 eentity_t& entity  = ecs->m_entity_mgr.m_a_entity[index];
                 entity.m_cp_groups = 0;
+                for (s8 i = 0; i < 7; ++i)
+                {
+                    entity.m_cp_group_cp_used[i]  = 0;
+                    entity.m_cp_group_en_index[i] = 0;
+                }
 
                 entity_gen_id_t& gen_id = ecs->m_entity_mgr.m_a_entity_ver[index];
                 gen_id += 1;
@@ -496,13 +552,13 @@ namespace ncore
                         // An entity can have more groups than we are looking for (but not less), this means that
                         // we need to iterate the groups of the entity to lock-step with the groups of the iterator
 
-                        s8 iter_group_index   = math::findFirstBit(iter.m_group_mask);
-                        s8 entity_group_index = math::findFirstBit(entity.m_cp_groups);
+                        s8 iter_group_index   = math::findFirstBit(~iter.m_group_mask);
+                        s8 entity_group_index = math::findFirstBit(~entity.m_cp_groups);
                         for (s8 i = 0; i < iter.m_num_groups; ++i)
                         {
                             while (entity_group_index < iter_group_index)
                             {
-                                entity_group_index = math::findFirstBit(entity.m_cp_groups & ~(1 << entity_group_index));
+                                entity_group_index = math::findFirstBit(~(entity.m_cp_groups & ~(1 << entity_group_index)));
                                 ASSERT(entity_group_index < 0); // This should not be possible!
                             }
 
@@ -510,8 +566,8 @@ namespace ncore
                                 goto iter_next_entity;
 
                             // Next group
-                            entity_group_index = math::findFirstBit(entity.m_cp_groups & ~(1 << entity_group_index));
-                            iter_group_index   = math::findFirstBit(iter.m_group_mask & ~(1 << iter_group_index));
+                            entity_group_index = math::findFirstBit(~(entity.m_cp_groups & ~(1 << entity_group_index)));
+                            iter_group_index   = math::findFirstBit(~(iter.m_group_mask & ~(1 << iter_group_index)));
                         }
 
                         return iter.m_entity_index;

@@ -26,7 +26,7 @@ namespace ncore
         struct cp_group_t;
 
         // Registers a component group, component type and tag type
-        extern cp_group_t* g_register_cp_group(ecs_t* ecs);
+        extern cp_group_t* g_register_cp_group(ecs_t* ecs, u32 max_entities);
         extern cp_type_t*  g_register_cp_type(ecs_t* r, cp_group_t* cp_group, const char* cp_name, s32 cp_sizeof, s32 cp_alignof = 8);
         extern cp_type_t*  g_register_tg_type(ecs_t* r, cp_group_t* cp_group, const char* tg_name);
 

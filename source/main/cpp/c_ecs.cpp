@@ -116,6 +116,7 @@ namespace ncore
         // component type, component type manager
         struct cp_nctype_t
         {
+            s32         cp_id; // Initialize to -1, calling 'g_register_tag_type' will initialize it
             s32         cp_sizeof;
             const char* cp_name;
         };
@@ -136,13 +137,18 @@ namespace ncore
 
         static void s_register_cp_type(cp_type_mgr_t* cps, cp_type_t* cp_type)
         {
-            u32 cp_id = cp_type->cp_id;
-            if (cp_id >= 0 || g_hbb_find(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, cp_id))
+            if (cp_type->cp_id >= 0) // Already registered ?
+                return;
+
+            u32 cp_id;
+            if (g_hbb_find(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, cp_id))
             {
                 ASSERTS(cp_id < cp_type_mgr_t::COMPONENTS_MAX, "Component type id is out of bounds");
-                cp_nctype_t* cp_type = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
-                cp_type->cp_sizeof   = cp_type->cp_sizeof;
-                cp_type->cp_name     = cp_type->cp_name;
+                cp_nctype_t* cp_nctype = (cp_nctype_t*)&cps->m_a_cp_type[cp_id];
+                cp_nctype->cp_sizeof   = cp_type->cp_sizeof;
+                cp_nctype->cp_name     = cp_type->cp_name;
+                cp_nctype->cp_id       = cp_id;
+                cp_type->cp_id         = cp_id;
 
                 g_hbb_clr(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, cp_id);
             }
@@ -156,7 +162,10 @@ namespace ncore
 
         static void s_unregister_cp_type(cp_type_mgr_t* cps, cp_type_t* cp_type)
         {
-            u32 const cp_id = cp_type->cp_id;
+            s32 const cp_id = cp_type->cp_id;
+            if (cp_id < 0)
+                return;
+            cp_type->cp_id = -1;
             g_hbb_set(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, cp_id);
         }
 
@@ -167,6 +176,7 @@ namespace ncore
 
         struct tg_nctype_t
         {
+            s32         tg_id;
             const char* tg_name;
         };
 
@@ -186,12 +196,17 @@ namespace ncore
 
         static void s_register_tag_type(tg_type_mgr_t* ts, tg_type_t* tg_type)
         {
-            u32 tg_id = tg_type->tg_id;
-            if (tg_id >= 0 || g_hbb_find(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, tg_id))
+            if (tg_type->tg_id >= 0) // Already registered ?
+                return;
+
+            u32 tg_id;
+            if (g_hbb_find(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, tg_id))
             {
                 ASSERTS(tg_id < tg_type_mgr_t::TAGS_MAX, "Tag type id is out of bounds");
-                tg_nctype_t* tg_type = (tg_nctype_t*)&ts->m_a_tg_type[tg_id];
-                tg_type->tg_name     = tg_type->tg_name;
+                tg_nctype_t* tg_nctype = (tg_nctype_t*)&ts->m_a_tg_type[tg_id];
+                tg_nctype->tg_name     = tg_type->tg_name;
+                tg_nctype->tg_id       = tg_id;
+                tg_type->tg_id         = tg_id;
 
                 g_hbb_clr(ts->m_a_tg_hbb_hdr, ts->m_a_tg_hbb, tg_id);
             }
@@ -679,6 +694,6 @@ namespace ncore
         }
 
         bool en_iterator_t::end() const { return m_en_type == nullptr; }
-        
-    } // namespace necs2
+
+    } // namespace necs
 } // namespace ncore

@@ -54,7 +54,6 @@ namespace ncore
         extern void*               g_get_cp(ecs_t* ecs, entity_t entity, cp_type_t* cp_type);
         template <typename T> T*   g_get_cp(ecs_t* ecs, entity_t entity, cp_type_t* cp_type) { return (T*)g_get_cp(ecs, entity, cp_type); }
         extern bool                g_has_tag(ecs_t* ecs, entity_t entity, tg_type_t* cp_type);
-        template <typename T> bool g_has_tag(ecs_t* ecs, entity_t entity, tg_type_t* tg_type) { return g_has_tag(ecs, entity, tg_type); }
         extern void                g_set_tag(ecs_t* ecs, entity_t entity, tg_type_t* cp_type);
         extern void                g_rem_tag(ecs_t* ecs, entity_t entity, tg_type_t* cp_type);
 
