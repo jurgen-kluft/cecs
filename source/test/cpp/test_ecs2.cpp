@@ -48,9 +48,9 @@ UNITTEST_SUITE_BEGIN(necs2)
 
             cp_group_t* cp_base_group = g_register_cp_group(ecs);
 
-            cp_type_t* byte_cp_type     = g_register_cp_type(ecs, "byte", sizeof(u8), cp_base_group);
-            cp_type_t* position_cp_type = g_register_cp_type(ecs, "position", sizeof(position_t), cp_base_group);
-            cp_type_t* velocity_cp_type = g_register_cp_type(ecs, "velocity", sizeof(velocity_t), cp_base_group);
+            cp_type_t* byte_cp_type     = g_register_cp_type(ecs, cp_base_group, "byte", sizeof(u8));
+            cp_type_t* position_cp_type = g_register_cp_type(ecs, cp_base_group, "position", sizeof(position_t));
+            cp_type_t* velocity_cp_type = g_register_cp_type(ecs, cp_base_group, "velocity", sizeof(velocity_t));
 
             CHECK_NOT_NULL(byte_cp_type);
             CHECK_NOT_NULL(position_cp_type);
@@ -65,10 +65,10 @@ UNITTEST_SUITE_BEGIN(necs2)
 
             cp_group_t* cp_base_group = g_register_cp_group(ecs);
 
-            cp_type_t* friendly  = g_register_tg_type(ecs, "friendly", cp_base_group);
-            cp_type_t* enemy_tag = g_register_tg_type(ecs, "enemy_tag", cp_base_group);
-            cp_type_t* target    = g_register_tg_type(ecs, "target", cp_base_group);
-            cp_type_t* dirty     = g_register_tg_type(ecs, "dirty", cp_base_group);
+            cp_type_t* friendly  = g_register_tg_type(ecs, cp_base_group, "friendly");
+            cp_type_t* enemy_tag = g_register_tg_type(ecs, cp_base_group, "enemy_tag");
+            cp_type_t* target    = g_register_tg_type(ecs, cp_base_group, "target");
+            cp_type_t* dirty     = g_register_tg_type(ecs, cp_base_group, "dirty");
 
             CHECK_NOT_NULL(friendly);
             CHECK_NOT_NULL(target);
@@ -81,10 +81,10 @@ UNITTEST_SUITE_BEGIN(necs2)
         {
             ecs_t* ecs = g_create_ecs(context_t::system_alloc(), 1024);
 
-            entity_t   e01  = g_create_entity(ecs);
-            entity_t   e02  = g_create_entity(ecs);
-            entity_t   e03  = g_create_entity(ecs);
-            entity_t   e04  = g_create_entity(ecs);
+            entity_t e01 = g_create_entity(ecs);
+            entity_t e02 = g_create_entity(ecs);
+            entity_t e03 = g_create_entity(ecs);
+            entity_t e04 = g_create_entity(ecs);
 
             g_destroy_entity(ecs, e01);
             g_destroy_entity(ecs, e02);
@@ -117,7 +117,7 @@ UNITTEST_SUITE_BEGIN(necs2)
             ecs_t* ecs = g_create_ecs(context_t::system_alloc(), 1024);
 
             cp_group_t* cp_base_group = g_register_cp_group(ecs);
-            cp_type_t* byte_cp_type = g_register_cp_type(ecs, "byte", sizeof(u8), cp_base_group);
+            cp_type_t*  byte_cp_type  = g_register_cp_type(ecs, cp_base_group, "byte", sizeof(u8));
 
             entity_t e01 = g_create_entity(ecs);
             g_set_cp(ecs, e01, byte_cp_type);
@@ -137,7 +137,7 @@ UNITTEST_SUITE_BEGIN(necs2)
             ecs_t* ecs = g_create_ecs(context_t::system_alloc(), 1024);
 
             cp_group_t* cp_base_group = g_register_cp_group(ecs);
-            cp_type_t* enemy_tag = g_register_tg_type(ecs, "enemy_tag", cp_base_group);
+            cp_type_t * enemy_tag = g_register_tg_type(ecs, cp_base_group, "enemy_tag");
 
             entity_t e01 = g_create_entity(ecs);
             g_set_tag(ecs, e01, enemy_tag);
@@ -156,11 +156,11 @@ UNITTEST_SUITE_BEGIN(necs2)
 
             cp_group_t* cp_base_group = g_register_cp_group(ecs);
 
-            cp_type_t* byte_cp_type     = g_register_cp_type(ecs, "byte", sizeof(u8), cp_base_group);
-            cp_type_t* position_cp_type = g_register_cp_type(ecs, "position", sizeof(position_t), cp_base_group);
-            cp_type_t* velocity_cp_type = g_register_cp_type(ecs, "velocity", sizeof(velocity_t), cp_base_group);
+            cp_type_t* byte_cp_type     = g_register_cp_type(ecs, cp_base_group, "byte", sizeof(u8));
+            cp_type_t* position_cp_type = g_register_cp_type(ecs, cp_base_group, "position", sizeof(position_t));
+            cp_type_t* velocity_cp_type = g_register_cp_type(ecs, cp_base_group, "velocity", sizeof(velocity_t));
 
-            cp_type_t* enemy_tag = g_register_tg_type(ecs, "enemy_tag", cp_base_group);
+            cp_type_t *enemy_tag = g_register_tg_type(ecs, cp_base_group, "enemy_tag");
 
             entity_t e01 = g_create_entity(ecs);
             entity_t e02 = g_create_entity(ecs);
