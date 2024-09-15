@@ -12,7 +12,8 @@ namespace ncore
     {
         const entity_t g_null_entity = (entity_t)0xFFFFFFFF;
 
-        typedef u8 entity_gen_id_t;
+        typedef u8  entity_gen_id_t;
+        typedef u32 entity_index_t;
 
         const u32 ECS_ENTITY_INDEX_MASK  = (0x00FFFFFF); // Mask to use to get the entity number out of an identifier
         const u32 ECS_ENTITY_GEN_ID_MASK = (0xFF000000); // Mask to use to get the generation id out of an identifier
@@ -27,13 +28,13 @@ namespace ncore
         struct cp_type_t; // Component Type shadow type for cp_nctype_t
 
         static inline entity_gen_id_t s_entity_gen(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_SHIFT; }
-        static inline u32             s_entity_index(entity_t e) { return (u32)e & ECS_ENTITY_INDEX_MASK; }
+        static inline entity_index_t  s_entity_index(entity_t e) { return (entity_index_t)e & ECS_ENTITY_INDEX_MASK; }
         static inline entity_t        s_make_entity(entity_gen_id_t gen, u32 id) { return ((u32)gen << ECS_ENTITY_GEN_SHIFT) | (id & ECS_ENTITY_INDEX_MASK); }
 
         struct cp_nctype_t
         {
             const char* cp_name;           // Name of the component
-            s16         cp_sizeof;         // Size of the component in bits
+            s16         cp_sizeof;         // Size of the component in bitsgb
             s16         cp_alignof;        // Alignment requirement of the component
             s8          cp_group_index;    // The group index
             s8          cp_group_cp_index; // The component index in the group
@@ -63,12 +64,12 @@ namespace ncore
             group->m_group_index = -1;
         }
 
-        static void s_cp_group_construct(cp_group_t* group, s8 index, u32 max_entities, alloc_t* allocator) 
-        { 
+        static void s_cp_group_construct(cp_group_t* group, s8 index, u32 max_entities, alloc_t* allocator)
+        {
             if (max_entities > 0)
             {
-                group->m_allocator = allocator;
-                group->m_group_index = index;
+                group->m_allocator    = allocator;
+                group->m_group_index  = index;
                 group->m_max_entities = max_entities;
                 g_hbb_init(group->m_en_hbb_hdr, max_entities);
                 g_hbb_init(group->m_en_hbb_hdr, group->m_en_hbb_data, 1, allocator);
@@ -77,7 +78,7 @@ namespace ncore
         static void s_cp_group_destruct(cp_group_t* group)
         {
             alloc_t* allocator = group->m_allocator;
-            u32 cp_used = group->m_cp_used;
+            u32      cp_used   = group->m_cp_used;
             while (cp_used != 0)
             {
                 s32 index = math::findFirstBit(cp_used);
@@ -122,7 +123,7 @@ namespace ncore
 
         // Component Group Manager
         // Note that we can have a maximum of 64 component groups, each component group can have a maximum of 32 components.
-        // So in total we can handle 64 * 32 = 2048 components.
+        // So in theory we can handle a total of 64 * 32 = 2048 components.
         struct cp_group_mgr_t
         {
             u32         m_cp_groups_max;  // Maximum number of component groups
@@ -132,20 +133,20 @@ namespace ncore
         };
 
         // Entity data structure (64 bytes)
-        // Note that this setup limits an entity to 7 component groups (so a maximum of 224 components per entity)
-        struct eentity_t
+        // Note that this setup limits an entity to 7 component groups (so a theoretical maximum of 224 components per entity)
+        struct entity_instance_t
         {
             u64 m_cp_groups;            // Global maximum of 64 component groups, each bit represents a group index (bit 0 is group 0, bit 3 is group 3 etc..)
-            u32 m_cp_group_cp_used[7];  // Each bit represents the 'components used' in that component group
+            u32 m_cp_group_cp_used[7];  // Each bit index represents the 'component index' in that component group
             u32 m_cp_group_en_index[7]; // The index of the entity in the component group
         };
 
         struct entity_mgr_t
         {
-            hbb_hdr_t        m_entity_hbb_hdr;  // The header for the hbb data
-            hbb_data_t       m_entity_hbb_data; // Which entities are free
-            entity_gen_id_t* m_a_entity_ver;    // The generation Id of each entity
-            eentity_t*       m_a_entity;        // The array of entities entries
+            hbb_hdr_t          m_entity_hbb_hdr;  // The header for the hbb data
+            hbb_data_t         m_entity_hbb_data; // Which entities are free
+            entity_gen_id_t*   m_a_entity_ver;    // The generation Id of each entity
+            entity_instance_t* m_a_entity;        // The array of entities entries
         };
 
         struct ecs_t
@@ -283,10 +284,10 @@ namespace ncore
             g_hbb_init(entity_mgr->m_entity_hbb_hdr, max_entities);
             g_hbb_init(entity_mgr->m_entity_hbb_hdr, entity_mgr->m_entity_hbb_data, 1, allocator);
             entity_mgr->m_a_entity_ver = (entity_gen_id_t*)allocator->allocate(sizeof(entity_gen_id_t) * max_entities);
-            entity_mgr->m_a_entity     = (eentity_t*)allocator->allocate(sizeof(eentity_t) * max_entities);
+            entity_mgr->m_a_entity     = (entity_instance_t*)allocator->allocate(sizeof(entity_instance_t) * max_entities);
         }
 
-        static bool s_create_entity(entity_mgr_t* entity_mgr, u32& index)
+        static bool s_create_entity(entity_mgr_t* entity_mgr, entity_index_t& index)
         {
             if (g_hbb_find(entity_mgr->m_entity_hbb_hdr, entity_mgr->m_entity_hbb_data, index))
             {
@@ -296,7 +297,7 @@ namespace ncore
             return false;
         }
 
-        static void s_destroy_entity(entity_mgr_t* entity_mgr, u32 index) { g_hbb_clr(entity_mgr->m_entity_hbb_hdr, entity_mgr->m_entity_hbb_data, index); }
+        static void s_destroy_entity(entity_mgr_t* entity_mgr, entity_index_t index) { g_hbb_clr(entity_mgr->m_entity_hbb_hdr, entity_mgr->m_entity_hbb_data, index); }
 
         static void s_exit(entity_mgr_t* entity_mgr, alloc_t* allocator)
         {
@@ -341,7 +342,7 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // entity functionality
 
-        static bool s_entity_has_component(ecs_t* ecs, entity_t e, cp_type_t* cp_type)
+        static bool s_entity_has_component(ecs_t* ecs, entity_t entity, cp_type_t* cp_type)
         {
             cp_nctype_t const* cp_nctype         = (cp_nctype_t*)cp_type;
             s8 const           cp_group_index    = cp_nctype->cp_group_index;
@@ -350,35 +351,35 @@ namespace ncore
             ASSERT(cp_group_index >= 0 && cp_group_index < 64);
             ASSERT(cp_group_cp_index >= 0 && cp_group_cp_index < 32);
 
-            eentity_t const& entity       = ecs->m_entity_mgr.m_a_entity[s_entity_index(e)];
-            u32 const        cp_group_bit = (1 << cp_group_index);
-            if ((entity.m_cp_groups & cp_group_bit) == cp_group_bit)
+            entity_instance_t const& entity_instance = ecs->m_entity_mgr.m_a_entity[s_entity_index(entity)];
+            u32 const                cp_group_bit    = (1 << cp_group_index);
+            if ((entity_instance.m_cp_groups & cp_group_bit) == cp_group_bit)
             {
                 // How many '1' bits are there before 'cp_group_bit' in 'm_cp_groups'
-                u32 const gi      = math::countBits(entity.m_cp_groups & (cp_group_bit - 1));
-                u32 const cp_used = entity.m_cp_group_cp_used[gi];
+                u32 const gi      = math::countBits(entity_instance.m_cp_groups & (cp_group_bit - 1));
+                u32 const cp_used = entity_instance.m_cp_group_cp_used[gi];
                 return (cp_used & (1 << cp_group_cp_index)) != 0;
             }
             return false;
         }
 
-        static void* s_entity_get_component(ecs_t* ecs, entity_t e, cp_type_t* cp_type)
+        static void* s_entity_get_component(ecs_t* ecs, entity_t entity, cp_type_t* cp_type)
         {
             cp_nctype_t const* cp_nctype         = (cp_nctype_t*)cp_type;
             s8 const           cp_group_index    = cp_nctype->cp_group_index;
             s8 const           cp_group_cp_index = cp_nctype->cp_group_cp_index;
 
-            u32 const  en_idx       = s_entity_index(e);
-            eentity_t& entity       = ecs->m_entity_mgr.m_a_entity[en_idx];
-            u32 const  cp_group_bit = (1 << cp_group_index);
-            if (entity.m_cp_groups & cp_group_bit)
+            u32 const          entity_index    = s_entity_index(entity);
+            entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
+            u32 const          cp_group_bit    = (1 << cp_group_index);
+            if (entity_instance.m_cp_groups & cp_group_bit)
             {
                 // How many '1' bits are there before in 'm_cp_group_cp_used'
-                u32 const gi      = math::countBits(entity.m_cp_groups & (cp_group_bit - 1));
-                u32 const cp_used = entity.m_cp_group_cp_used[gi];
+                u32 const gi      = math::countBits(entity_instance.m_cp_groups & (cp_group_bit - 1));
+                u32 const cp_used = entity_instance.m_cp_group_cp_used[gi];
                 if (cp_used & (1 << cp_group_cp_index))
                 {
-                    u32 const   cp_group_en_index = entity.m_cp_group_en_index[gi];
+                    u32 const   cp_group_en_index = entity_instance.m_cp_group_en_index[gi];
                     cp_group_t* group             = &ecs->m_cp_group_mgr.m_cp_groups[cp_group_index];
                     return group->m_a_en_cp_data[cp_group_en_index];
                 }
@@ -393,21 +394,21 @@ namespace ncore
             s8 const           cp_group_cp_index = cp_nctype->cp_group_cp_index;
             u32 const          c_group_bit       = (1 << cp_group_index);
 
-            u32 const  en_idx = s_entity_index(e);
-            eentity_t& entity = ecs->m_entity_mgr.m_a_entity[en_idx];
-            if ((entity.m_cp_groups & c_group_bit) == 0)
+            u32 const          entity_index    = s_entity_index(e);
+            entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
+            if ((entity_instance.m_cp_groups & c_group_bit) == 0)
             {
-                // An entity can have a maximum of 7 component groups
-                if (math::countBits(entity.m_cp_groups) == 7)
+                // An entity_instance can have a maximum of 7 component groups
+                if (math::countBits(entity_instance.m_cp_groups) == 7)
                     return;
 
-                entity.m_cp_groups |= c_group_bit;
+                entity_instance.m_cp_groups |= c_group_bit;
             }
 
             // How many '1' bits are there before in 'm_cp_group_cp_used'
-            u32 const gb      = entity.m_cp_groups & (c_group_bit - 1);
+            u32 const gb      = entity_instance.m_cp_groups & (c_group_bit - 1);
             s8 const  gi      = math::countBits(gb);
-            u32&      cp_used = entity.m_cp_group_cp_used[gi];
+            u32&      cp_used = entity_instance.m_cp_group_cp_used[gi];
             cp_used |= (1 << cp_group_cp_index);
         }
 
@@ -418,14 +419,14 @@ namespace ncore
             s8 const           cp_group_index    = cp_nctype->cp_group_index;
             s8 const           cp_group_cp_index = cp_nctype->cp_group_cp_index;
 
-            u32 const  en_idx = s_entity_index(e);
-            eentity_t& entity = ecs->m_entity_mgr.m_a_entity[en_idx];
-            if (entity.m_cp_groups & (1 << cp_group_index))
+            u32 const          entity_index    = s_entity_index(e);
+            entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
+            if (entity_instance.m_cp_groups & (1 << cp_group_index))
             {
                 // How many '1' bits are there before in 'm_cp_group_cp_used'
-                u32 const gb      = entity.m_cp_groups & ((1 << cp_group_index) - 1);
+                u32 const gb      = entity_instance.m_cp_groups & ((1 << cp_group_index) - 1);
                 s8 const  gi      = math::countBits(gb);
-                u32&      cp_used = entity.m_cp_group_cp_used[gi];
+                u32&      cp_used = entity_instance.m_cp_group_cp_used[gi];
                 cp_used &= ~(1 << cp_group_cp_index);
 
                 // TODO Remove the component in the component group if it is a component.
@@ -441,20 +442,20 @@ namespace ncore
 
         entity_t g_create_entity(ecs_t* ecs)
         {
-            u32 index;
-            if (s_create_entity(&ecs->m_entity_mgr, index))
+            entity_index_t entity_index;
+            if (s_create_entity(&ecs->m_entity_mgr, entity_index))
             {
-                eentity_t& entity  = ecs->m_entity_mgr.m_a_entity[index];
-                entity.m_cp_groups = 0;
+                entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
+                entity_instance.m_cp_groups        = 0;
                 for (s8 i = 0; i < 7; ++i)
                 {
-                    entity.m_cp_group_cp_used[i]  = 0;
-                    entity.m_cp_group_en_index[i] = 0;
+                    entity_instance.m_cp_group_cp_used[i]  = 0;
+                    entity_instance.m_cp_group_en_index[i] = 0;
                 }
 
-                entity_gen_id_t& gen_id = ecs->m_entity_mgr.m_a_entity_ver[index];
+                entity_gen_id_t& gen_id = ecs->m_entity_mgr.m_a_entity_ver[entity_index];
                 gen_id += 1;
-                return s_make_entity(gen_id, index);
+                return s_make_entity(gen_id, entity_index);
             }
             return g_null_entity;
         }
@@ -467,8 +468,8 @@ namespace ncore
             if (gen_id != cur_id)
                 return;
 
-            u32 const index = s_entity_index(e);
-            s_destroy_entity(&ecs->m_entity_mgr, index);
+            entity_index_t const entity_index = s_entity_index(e);
+            s_destroy_entity(&ecs->m_entity_mgr, entity_index);
         }
 
         bool  g_has_cp(ecs_t* ecs, entity_t entity, cp_type_t* cp_type) { return s_entity_has_component(ecs, entity, cp_type); }
@@ -544,29 +545,29 @@ namespace ncore
                 {
                     // Until we encounter an entity that has all the required components/tags
                     // First match the component groups and then the components/tags
-                    eentity_t& entity = iter.m_ecs->m_entity_mgr.m_a_entity[iter.m_entity_index];
-                    if ((entity.m_cp_groups & iter.m_group_mask) == iter.m_group_mask)
+                    entity_instance_t& entity_instance = iter.m_ecs->m_entity_mgr.m_a_entity[iter.m_entity_index];
+                    if ((entity_instance.m_cp_groups & iter.m_group_mask) == iter.m_group_mask)
                     {
                         // Groups are matching, do we have the correct components/tags?
 
                         // An entity can have more groups than we are looking for (but not less), this means that
-                        // we need to iterate the groups of the entity to lock-step with the groups of the iterator
+                        // we need to iterate the groups of the entity_instance to lock-step with the groups of the iterator
 
                         s8 iter_group_index   = math::findFirstBit(~iter.m_group_mask);
-                        s8 entity_group_index = math::findFirstBit(~entity.m_cp_groups);
+                        s8 entity_group_index = math::findFirstBit(~entity_instance.m_cp_groups);
                         for (s8 i = 0; i < iter.m_num_groups; ++i)
                         {
                             while (entity_group_index < iter_group_index)
                             {
-                                entity_group_index = math::findFirstBit(~(entity.m_cp_groups & ~(1 << entity_group_index)));
+                                entity_group_index = math::findFirstBit(~(entity_instance.m_cp_groups & ~(1 << entity_group_index)));
                                 ASSERT(entity_group_index < 0); // This should not be possible!
                             }
 
-                            if (iter.m_group_cp_mask[i] != (entity.m_cp_group_cp_used[entity_group_index] & iter.m_group_cp_mask[i]))
+                            if (iter.m_group_cp_mask[i] != (entity_instance.m_cp_group_cp_used[entity_group_index] & iter.m_group_cp_mask[i]))
                                 goto iter_next_entity;
 
                             // Next group
-                            entity_group_index = math::findFirstBit(~(entity.m_cp_groups & ~(1 << entity_group_index)));
+                            entity_group_index = math::findFirstBit(~(entity_instance.m_cp_groups & ~(1 << entity_group_index)));
                             iter_group_index   = math::findFirstBit(~(iter.m_group_mask & ~(1 << iter_group_index)));
                         }
 
