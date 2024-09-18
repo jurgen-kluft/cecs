@@ -25,16 +25,15 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // type definitions and utility functions
 
-        struct cp_type_t; // Component Type shadow type for cp_nctype_t
-
         static inline entity_gen_id_t s_entity_gen(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_SHIFT; }
         static inline entity_index_t  s_entity_index(entity_t e) { return (entity_index_t)e & ECS_ENTITY_INDEX_MASK; }
         static inline entity_t        s_make_entity(entity_gen_id_t gen, u32 id) { return ((u32)gen << ECS_ENTITY_GEN_SHIFT) | (id & ECS_ENTITY_INDEX_MASK); }
 
+        // Component Type 'shadow type' for cp_type_t and tg_type_t
         struct cp_nctype_t
         {
             const char* cp_name;           // Name of the component
-            s16         cp_sizeof;         // Size of the component in bitsgb
+            s32         cp_sizeof;         // Size of the component in bits
             s16         cp_alignof;        // Alignment requirement of the component
             s8          cp_group_index;    // The group index
             s8          cp_group_cp_index; // The component index in the group
@@ -96,8 +95,10 @@ namespace ncore
             if (cp_id >= 0 && cp_id < 32)
             {
                 group->m_cp_used |= (1 << cp_id);
+
+                // Only create entity-component data array for components and *not* for tags
                 if (cp_type->cp_sizeof > 0)
-                { // Only create data array for components and not for tags
+                { 
                     group->m_a_en_cp_data[cp_id] = (byte*)group->m_allocator->allocate(group->m_max_entities * cp_type->cp_sizeof);
                 }
 
@@ -215,7 +216,7 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // tag type, tag type manager
 
-        static cp_type_t* s_register_tag_type(cp_type_mgr_t* ts, const char* cp_name, cp_group_t* cp_group) { return s_register_cp_type(ts, cp_group, cp_name, 0, 0); }
+        static tg_type_t* s_register_tag_type(cp_type_mgr_t* ts, const char* cp_name, cp_group_t* cp_group) { return (tg_type_t*)s_register_cp_type(ts, cp_group, cp_name, 0, 0); }
         static void       s_unregister_tg_type(cp_type_mgr_t* cps, cp_type_t* cp_type, cp_group_mgr_t* cp_group_mgr) { s_unregister_cp_type(cps, cp_type, cp_group_mgr); }
 
         // --------------------------------------------------------------------------------------------------------
@@ -337,7 +338,7 @@ namespace ncore
 
         cp_group_t* g_register_cp_group(ecs_t* ecs, u32 max_entities) { return s_register_group(&ecs->m_cp_group_mgr, max_entities); }
         cp_type_t*  g_register_cp_type(ecs_t* r, cp_group_t* cp_group, const char* cp_name, s32 cp_sizeof, s32 cp_alignof) { return s_register_cp_type(&r->m_cp_type_mgr, cp_group, cp_name, cp_sizeof, cp_alignof); }
-        cp_type_t*  g_register_tg_type(ecs_t* r, cp_group_t* cp_group, const char* cp_name) { return s_register_tag_type(&r->m_cp_type_mgr, cp_name, cp_group); }
+        tg_type_t*  g_register_tg_type(ecs_t* r, cp_group_t* cp_group, const char* cp_name) { return s_register_tag_type(&r->m_cp_type_mgr, cp_name, cp_group); }
 
         // --------------------------------------------------------------------------------------------------------
         // entity functionality
@@ -436,9 +437,9 @@ namespace ncore
 
         // Tags are just components with no data, and since we use bits to indicate if a component is used or not, we can use the same system for tags.
 
-        static bool s_entity_has_tag(ecs_t* ecs, entity_t e, cp_type_t* tg_type) { return s_entity_has_component(ecs, e, tg_type); }
-        static void s_entity_set_tag(ecs_t* ecs, entity_t e, cp_type_t* tg_type) { s_entity_set_component(ecs, e, tg_type); }
-        static void s_entity_rem_tag(ecs_t* ecs, entity_t e, cp_type_t* tg_type) { s_entity_rem_component(ecs, e, tg_type); }
+        static bool s_entity_has_tag(ecs_t* ecs, entity_t e, tg_type_t* tg_type) { return s_entity_has_component(ecs, e, (cp_type_t*)tg_type); }
+        static void s_entity_set_tag(ecs_t* ecs, entity_t e, tg_type_t* tg_type) { s_entity_set_component(ecs, e, (cp_type_t*)tg_type); }
+        static void s_entity_rem_tag(ecs_t* ecs, entity_t e, tg_type_t* tg_type) { s_entity_rem_component(ecs, e, (cp_type_t*)tg_type); }
 
         entity_t g_create_entity(ecs_t* ecs)
         {
@@ -477,14 +478,14 @@ namespace ncore
         void  g_rem_cp(ecs_t* ecs, entity_t entity, cp_type_t* cp_type) { s_entity_rem_component(ecs, entity, cp_type); }
         void* g_get_cp(ecs_t* ecs, entity_t entity, cp_type_t* cp_type) { return s_entity_get_component(ecs, entity, cp_type); }
 
-        bool g_has_tag(ecs_t* ecs, entity_t entity, cp_type_t* tg_type) { return s_entity_has_tag(ecs, entity, tg_type); }
-        void g_set_tag(ecs_t* ecs, entity_t entity, cp_type_t* tg_type) { s_entity_set_tag(ecs, entity, tg_type); }
-        void g_rem_tag(ecs_t* ecs, entity_t entity, cp_type_t* tg_type) { s_entity_rem_tag(ecs, entity, tg_type); }
+        bool g_has_tag(ecs_t* ecs, entity_t entity, tg_type_t* tg_type) { return s_entity_has_tag(ecs, entity, tg_type); }
+        void g_set_tag(ecs_t* ecs, entity_t entity, tg_type_t* tg_type) { s_entity_set_tag(ecs, entity, tg_type); }
+        void g_rem_tag(ecs_t* ecs, entity_t entity, tg_type_t* tg_type) { s_entity_rem_tag(ecs, entity, tg_type); }
 
         //////////////////////////////////////////////////////////////////////////
         // en_iterator_t
 
-        void en_iterator_t::initialize(ecs_t* ecs)
+        void en_iterator_t::init(ecs_t* ecs)
         {
             m_ecs              = ecs;
             m_entity_index     = 0;
@@ -496,7 +497,7 @@ namespace ncore
         }
 
         // Mark the things you want to iterate on
-        void en_iterator_t::cp_type(cp_type_t* cp_type)
+        void en_iterator_t::set_cp_type(cp_type_t* cp_type)
         {
             cp_nctype_t const* cp_nctype         = (cp_nctype_t*)cp_type;
             s8 const           cp_group_index    = cp_nctype->cp_group_index;
