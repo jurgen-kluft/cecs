@@ -113,6 +113,7 @@ namespace ncore
             ASSERT(cp_index >= 0 && cp_index < 32);
             group->m_cp_used &= ~(1 << cp_index);
             group->m_allocator->deallocate(group->m_a_en_cp_data[cp_index]);
+            group->m_a_en_cp_data[cp_index] = nullptr;
         }
 
         // Component Type Manager
@@ -199,8 +200,7 @@ namespace ncore
                 g_hbb_clr(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, cp_id);
 
                 // Register a component in the component group
-                u32 const cp_group_cp_index = s_cp_group_register_cp(cp_group, cp_type);
-                cp_type->cp_group_cp_index  = cp_group_cp_index;
+                cp_type->cp_group_cp_index = s_cp_group_register_cp(cp_group, cp_type);
 
                 return cp_type;
             }
@@ -209,14 +209,19 @@ namespace ncore
 
         static void s_unregister_cp_type(cp_type_mgr_t* cps, cp_type_t* cp_type, cp_group_mgr_t* cp_group_mgr)
         {
-            cg_type_t* group = &cp_group_mgr->m_cp_groups[cp_type->cp_group_index];
-            s_cp_group_unregister_cp(group, cp_type->cp_group_cp_index);
+            u32 const cp_id = (u32)(cp_type - cps->m_a_cp_type);
+            if (g_hbb_is_set(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, cp_id) == false)
+            {
+                cg_type_t* group = &cp_group_mgr->m_cp_groups[cp_type->cp_group_index];
+                s_cp_group_unregister_cp(group, cp_type->cp_group_cp_index);
+                g_hbb_set(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, cp_id);
+            }
         }
 
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
-        // tag type, tag type manager
+        // tag type, tag type manager (tags are basically components, but they have no backing component data)
 
         static tg_type_t* s_register_tag_type(cp_type_mgr_t* ts, const char* cp_name, cg_type_t* cp_group) { return (tg_type_t*)s_register_cp_type(ts, cp_group, cp_name, 0, 0); }
         static void       s_unregister_tg_type(cp_type_mgr_t* cps, cp_type_t* cp_type, cp_group_mgr_t* cp_group_mgr) { s_unregister_cp_type(cps, cp_type, cp_group_mgr); }
@@ -350,8 +355,13 @@ namespace ncore
         }
 
         cg_type_t* g_register_cp_group(ecs_t* ecs, u32 max_entities, const char* cg_name) { return s_register_group(&ecs->m_cp_group_mgr, max_entities, cg_name); }
+        void       g_unregister_cp_group(ecs_t* ecs, cg_type_t* cg_type) { return s_unregister_group(&ecs->m_cp_group_mgr, cg_type); }
+
         cp_type_t* g_register_cp_type(ecs_t* r, cg_type_t* cp_group, const char* cp_name, s32 cp_sizeof, s32 cp_alignof) { return s_register_cp_type(&r->m_cp_type_mgr, cp_group, cp_name, cp_sizeof, cp_alignof); }
+        void       g_unregister_cp_type(ecs_t* r, cp_type_t* cp_type) { return s_unregister_cp_type(&r->m_cp_type_mgr, cp_type, &r->m_cp_group_mgr); }
+
         tg_type_t* g_register_tg_type(ecs_t* r, cg_type_t* cp_group, const char* cp_name) { return s_register_tag_type(&r->m_cp_type_mgr, cp_name, cp_group); }
+        void       g_unregister_tg_type(ecs_t* r, tg_type_t* tg_type) { return s_unregister_tg_type(&r->m_cp_type_mgr, (cp_type_t*)tg_type, &r->m_cp_group_mgr); }
 
         // --------------------------------------------------------------------------------------------------------
         // entity functionality

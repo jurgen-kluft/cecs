@@ -42,12 +42,12 @@ namespace ncore
     {
     };
 
-    struct base_group_t
+    struct main_component_group_t
     {
     };
 
-    REGISTER_ECS_GROUP(base_group_t);
-    DECLARE_ECS_GROUP(base_group_t);
+    REGISTER_ECS_GROUP(main_component_group_t);
+    DECLARE_ECS_GROUP(main_component_group_t);
     REGISTER_ECS_COMPONENT(position_t);
     DECLARE_ECS_COMPONENT(position_t);
     REGISTER_ECS_COMPONENT(velocity_t);
@@ -86,12 +86,19 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_cp_group<base_group_t>(ecs, 1024);
+            g_register_cp_group<main_component_group_t>(ecs, 1024);
 
-            g_register_component<base_group_t, u8>();
-            g_register_component<base_group_t, position_t>();
-            g_register_component<base_group_t, velocity_t>();
-            g_register_component<base_group_t, physics_state_t>();
+            g_register_component<main_component_group_t, u8>();
+            g_register_component<main_component_group_t, position_t>();
+            g_register_component<main_component_group_t, velocity_t>();
+            g_register_component<main_component_group_t, physics_state_t>();
+
+            g_unregister_component<main_component_group_t, physics_state_t>();
+            g_unregister_component<main_component_group_t, velocity_t>();
+            g_unregister_component<main_component_group_t, position_t>();
+            g_unregister_component<main_component_group_t, u8>();
+
+            g_unregister_cp_group<main_component_group_t>();
 
             g_destroy_ecs(ecs);
         }
@@ -100,12 +107,19 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_cp_group<base_group_t>(ecs, 1024);
+            g_register_cp_group<main_component_group_t>(ecs, 1024);
 
-            g_register_tag<base_group_t, enemy_tag_t>();
-            g_register_tag<base_group_t, friendly_tag_t>();
-            g_register_tag<base_group_t, target_tag_t>();
-            g_register_tag<base_group_t, dirty_tag_t>();
+            g_register_tag<main_component_group_t, enemy_tag_t>();
+            g_register_tag<main_component_group_t, friendly_tag_t>();
+            g_register_tag<main_component_group_t, target_tag_t>();
+            g_register_tag<main_component_group_t, dirty_tag_t>();
+
+            g_unregister_tag<main_component_group_t, dirty_tag_t>();
+            g_unregister_tag<main_component_group_t, target_tag_t>();
+            g_unregister_tag<main_component_group_t, friendly_tag_t>();
+            g_unregister_tag<main_component_group_t, enemy_tag_t>();
+
+            g_unregister_cp_group<main_component_group_t>();
 
             g_destroy_ecs(ecs);
         }
@@ -149,8 +163,8 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_cp_group<base_group_t>(ecs, 1024);
-            g_register_component<base_group_t, u8>();
+            g_register_cp_group<main_component_group_t>(ecs, 1024);
+            g_register_component<main_component_group_t, u8>();
 
             entity_t e01 = g_create_entity(ecs);
             g_add_cp<u8>(e01);
@@ -158,6 +172,10 @@ UNITTEST_SUITE_BEGIN(ecs2)
             CHECK_TRUE(g_has_cp<u8>(e01));
 
             g_destroy_entity(ecs, e01);
+
+            g_unregister_component<main_component_group_t, u8>();
+            g_unregister_cp_group<main_component_group_t>();
+
             g_destroy_ecs(ecs);
         }
 
@@ -165,8 +183,8 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_cp_group<base_group_t>(ecs, 1024);
-            g_register_tag<base_group_t, enemy_tag_t>();
+            g_register_cp_group<main_component_group_t>(ecs, 1024);
+            g_register_tag<main_component_group_t, enemy_tag_t>();
 
             entity_t e01 = g_create_entity(ecs);
             g_add_tag<enemy_tag_t>(e01);
@@ -176,6 +194,10 @@ UNITTEST_SUITE_BEGIN(ecs2)
             CHECK_FALSE(g_has_tag<enemy_tag_t>(e01));
 
             g_destroy_entity(ecs, e01);
+
+            g_unregister_tag<main_component_group_t, enemy_tag_t>();
+            g_unregister_cp_group<main_component_group_t>();
+
             g_destroy_ecs(ecs);
         }
 
@@ -183,13 +205,13 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_cp_group<base_group_t>(ecs, 1024);
+            g_register_cp_group<main_component_group_t>(ecs, 1024);
 
-            g_register_component<base_group_t, u8>();
-            g_register_component<base_group_t, position_t>();
-            g_register_component<base_group_t, velocity_t>();
+            g_register_component<main_component_group_t, u8>();
+            g_register_component<main_component_group_t, position_t>();
+            g_register_component<main_component_group_t, velocity_t>();
 
-            g_register_tag<base_group_t, enemy_tag_t>();
+            g_register_tag<main_component_group_t, enemy_tag_t>();
 
             entity_t e01 = g_create_entity(ecs);
             entity_t e02 = g_create_entity(ecs);
@@ -233,6 +255,15 @@ UNITTEST_SUITE_BEGIN(ecs2)
             g_destroy_entity(ecs, e02);
             g_destroy_entity(ecs, e03);
             g_destroy_entity(ecs, e04);
+
+            g_unregister_component<main_component_group_t, velocity_t>();
+            g_unregister_component<main_component_group_t, position_t>();
+            g_unregister_component<main_component_group_t, u8>();
+
+            g_unregister_tag<main_component_group_t, enemy_tag_t>();
+
+            g_unregister_cp_group<main_component_group_t>();
+
             g_destroy_ecs(ecs);
         }
     }

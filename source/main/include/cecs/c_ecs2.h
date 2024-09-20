@@ -17,6 +17,13 @@ namespace ncore
         struct tg_type_t;
         struct cg_type_t;
 
+        template <typename T> struct cg_typeinfo_t
+        {
+            static ecs_t*            cg_ecs;  // Pointer to the ecs where this group is registered
+            static const char* const cg_name; // Name of this component group
+            static cg_type_t*        cg_type; // Pointer to component group used internally
+        };
+
         template <typename T> struct cp_typeinfo_t
         {
             static ecs_t*            cp_ecs;   // Pointer to the ecs where this group is registered
@@ -31,13 +38,6 @@ namespace ncore
             static const char* const tg_name;  // Name of this tag
             static cg_type_t*        tg_group; // Pointer to the component group where this tag is registered
             static tg_type_t*        tg_type;  // Pointer to tag type used internally
-        };
-
-        template <typename T> struct cg_typeinfo_t
-        {
-            static ecs_t*            cg_ecs;  // Pointer to the ecs where this group is registered
-            static const char* const cg_name; // Name of this component group
-            static cg_type_t*        cg_type; // Pointer to component group used internally
         };
 
         // Note: Once a type is used to register it at an ECS, it cannot be used to register at another ECS.
@@ -76,15 +76,24 @@ namespace ncore
 
         // Register a Component Group with an ECS
         extern cg_type_t*          g_register_cp_group(ecs_t* ecs, u32 cg_max_entities, const char* cg_name);
+        extern void                g_unregister_cp_group(ecs_t* ecs, cg_type_t* cg_type);
         template <typename T> void g_register_cp_group(ecs_t* ecs, u32 max_entities)
         {
             ASSERTS(cg_typeinfo_t<T>::cg_ecs == nullptr, "Component group already registered");
-            cg_typeinfo_t<T>::cg_ecs = ecs;
+            cg_typeinfo_t<T>::cg_ecs  = ecs;
             cg_typeinfo_t<T>::cg_type = g_register_cp_group(ecs, max_entities, cg_typeinfo_t<T>::cg_name);
+        }
+        template <typename T> void g_unregister_cp_group()
+        {
+            ASSERTS(cg_typeinfo_t<T>::cg_ecs != nullptr, "Component group is not registered");
+            g_unregister_cp_group(cg_typeinfo_t<T>::cg_ecs, cg_typeinfo_t<T>::cg_type);
+            cg_typeinfo_t<T>::cg_ecs  = nullptr;
+            cg_typeinfo_t<T>::cg_type = nullptr;
         }
 
         // Register a Component under a Component Group
         extern cp_type_t*                      g_register_cp_type(ecs_t* ecs, cg_type_t* cp_group, const char* cp_name, s32 cp_sizeof, s32 cp_alignof = 8);
+        extern void                            g_unregister_cp_type(ecs_t* ecs, cp_type_t* cp_type);
         template <typename G, typename T> void g_register_component()
         {
             ASSERTS(cp_typeinfo_t<T>::cp_ecs == nullptr, "Component already registered");
@@ -93,9 +102,18 @@ namespace ncore
             cp_typeinfo_t<T>::cp_group = cg_type;
             cp_typeinfo_t<T>::cp_type  = g_register_cp_type(cg_typeinfo_t<G>::cg_ecs, cg_type, cp_typeinfo_t<T>::cp_name, sizeof(T), alignof(T));
         }
+        template <typename G, typename T> void g_unregister_component()
+        {
+            ASSERTS(cp_typeinfo_t<T>::cp_ecs != nullptr, "Component is not registered");
+            g_unregister_cp_type(cg_typeinfo_t<G>::cg_ecs, cp_typeinfo_t<T>::cp_type);
+            cp_typeinfo_t<T>::cp_ecs   = nullptr;
+            cp_typeinfo_t<T>::cp_group = nullptr;
+            cp_typeinfo_t<T>::cp_type  = nullptr;
+        }
 
         // Register a Tag under a Component Group
         extern tg_type_t*                      g_register_tg_type(ecs_t* ecs, cg_type_t* cp_group, const char* tg_name);
+        extern void                            g_unregister_tg_type(ecs_t* ecs, tg_type_t* tg_type);
         template <typename G, typename T> void g_register_tag()
         {
             ASSERTS(tg_typeinfo_t<T>::tg_ecs == nullptr, "Tag already registered");
@@ -103,6 +121,14 @@ namespace ncore
             tg_typeinfo_t<T>::tg_ecs   = cg_typeinfo_t<G>::cg_ecs;
             tg_typeinfo_t<T>::tg_group = cg_type;
             tg_typeinfo_t<T>::tg_type  = g_register_tg_type(cg_typeinfo_t<G>::cg_ecs, cg_type, tg_typeinfo_t<T>::tg_name);
+        }
+        template <typename G, typename T> void g_unregister_tag()
+        {
+            ASSERTS(tg_typeinfo_t<T>::tg_ecs != nullptr, "Tag is not registered");
+            g_unregister_tg_type(cg_typeinfo_t<G>::cg_ecs, tg_typeinfo_t<T>::tg_type);
+            tg_typeinfo_t<T>::tg_ecs   = nullptr;
+            tg_typeinfo_t<T>::tg_group = nullptr;
+            tg_typeinfo_t<T>::tg_type  = nullptr;
         }
 
         extern ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities);
