@@ -168,7 +168,8 @@ namespace ncore
             s32    m_entity_index_max; // Maximum entity index
             s8     m_num_groups;       // Number of component groups that the iterator is looking at
 
-            void init(ecs_t* ecs);
+            en_iterator_t(ecs_t* ecs);
+
             void set_cp_type(cp_type_t* cp_type); // Mark the things you want to iterate on
             void set_tg_type(tg_type_t* tg_type) { set_cp_type((cp_type_t*)tg_type); }
 

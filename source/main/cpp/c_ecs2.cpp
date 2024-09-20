@@ -495,7 +495,7 @@ namespace ncore
         //////////////////////////////////////////////////////////////////////////
         // en_iterator_t
 
-        void en_iterator_t::init(ecs_t* ecs)
+        en_iterator_t::en_iterator_t(ecs_t* ecs)
         {
             m_ecs              = ecs;
             m_entity_index     = 0;

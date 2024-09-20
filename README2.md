@@ -21,13 +21,16 @@ to come up with something simple and efficient. The primary focus was memory con
 and performance.  
 
 ```c++
+struct base_group_t
+{
+};
 
 // Entity Component System; create and destroy
 ecs_t* ecs = g_create_ecs(alloc_t*, 1024);
 g_destroy_ecs(ecs_t* ecs);
 
 // Component Group
-cp_group_t* cp_group_go = g_register_cp_group(ecs);
+g_register_cp_group<base_group_t>(ecs);
 
 // Create/Delete entity
 entity_t e = g_create_entity(ecs);
@@ -40,44 +43,43 @@ struct position_t
 };
 
 // Register a component type in a component group
-cp_type_t* cp_type_byte = g_register_cp_type(ecs, cp_group_go, "byte", sizeof(char), alignof(char));
-cp_type_t* cp_type_pos = g_register_cp_type(ecs, cp_group_go, "position", sizeof(position_t), alignof(position_t));
+g_register_component<base_group_t, position_t>();
 
 // Attach/detach a component to an entity
-g_set_cp(ecs, e, cp_type_pos);
+g_add_cp<position_t>(e);
 if (g_has_cp(ecs, e, cp_type_pos))
 {
-    position_t* en_pos = g_get_cp<position_t>(ecs, e, cp_type_pos);
-    g_rem_cp(ecs, e, cp_type_pos);
+    position_t* en_pos = g_get_cp<position_t>(e);
+    g_rem_cp<position_t>(e);
 }
 
 // Tags (1 bit per entity)
-
-cp_type_t* alerted = g_register_tg_type(ecs, cp_group_go, "alerted");
-
-g_set_tag(ecs, e, alerted);
-if (g_has_tag(ecs, e, alerted))
+struct alerted_t
 {
-    g_rem_tag(ecs, e, alerted);
+};
+
+g_register_tag<base_group_t, alerted_t>();
+
+g_set_tag<alerted_t>(e);
+if (g_has_tag<alerted_t>(e))
+{
+    g_rem_tag<alerted_t>(e);
 }
 
 // Iteration
 
-en_iterator_t iter;
-iter.initialize(ecs);        // Iterate over all entity types
+en_iterator_t iter(ecs);
 
-iter.cp_type(cp_type_byte);
-iter.cp_type(cp_type_pos);
-iter.tg_type(alerted);
+iter.set_cp_type<position_t>();
+iter.set_tg_type<alerted_t>();
 
 iter.begin();
 while (!iter.end())
 {
     entity_t e = iter.item();
 
-    CHECK_TRUE(g_has_tag(ecs, e, alerted));
-    CHECK_TRUE(g_has_cp(ecs, e, cp_type_byte));
-    CHECK_TRUE(g_has_cp(ecs, e, cp_type_pos));
+    CHECK_TRUE(g_has_tag<alerted_t>(e));
+    CHECK_TRUE(g_has_cp<position_t>(e));
 
     iter.next();
 }
