@@ -86,7 +86,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_cp_group<main_component_group_t>(ecs, 1024);
+            g_register_group<main_component_group_t>(ecs, 1024);
 
             g_register_component<main_component_group_t, u8>();
             g_register_component<main_component_group_t, position_t>();
@@ -98,7 +98,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
             g_unregister_component<main_component_group_t, position_t>();
             g_unregister_component<main_component_group_t, u8>();
 
-            g_unregister_cp_group<main_component_group_t>();
+            g_unregister_group<main_component_group_t>();
 
             g_destroy_ecs(ecs);
         }
@@ -107,7 +107,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_cp_group<main_component_group_t>(ecs, 1024);
+            g_register_group<main_component_group_t>(ecs, 1024);
 
             g_register_tag<main_component_group_t, enemy_tag_t>();
             g_register_tag<main_component_group_t, friendly_tag_t>();
@@ -119,7 +119,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
             g_unregister_tag<main_component_group_t, friendly_tag_t>();
             g_unregister_tag<main_component_group_t, enemy_tag_t>();
 
-            g_unregister_cp_group<main_component_group_t>();
+            g_unregister_group<main_component_group_t>();
 
             g_destroy_ecs(ecs);
         }
@@ -163,7 +163,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_cp_group<main_component_group_t>(ecs, 1024);
+            g_register_group<main_component_group_t>(ecs, 1024);
             g_register_component<main_component_group_t, u8>();
 
             entity_t e01 = g_create_entity(ecs);
@@ -174,7 +174,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
             g_destroy_entity(ecs, e01);
 
             g_unregister_component<main_component_group_t, u8>();
-            g_unregister_cp_group<main_component_group_t>();
+            g_unregister_group<main_component_group_t>();
 
             g_destroy_ecs(ecs);
         }
@@ -183,7 +183,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_cp_group<main_component_group_t>(ecs, 1024);
+            g_register_group<main_component_group_t>(ecs, 1024);
             g_register_tag<main_component_group_t, enemy_tag_t>();
 
             entity_t e01 = g_create_entity(ecs);
@@ -196,7 +196,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
             g_destroy_entity(ecs, e01);
 
             g_unregister_tag<main_component_group_t, enemy_tag_t>();
-            g_unregister_cp_group<main_component_group_t>();
+            g_unregister_group<main_component_group_t>();
 
             g_destroy_ecs(ecs);
         }
@@ -205,7 +205,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_cp_group<main_component_group_t>(ecs, 1024);
+            g_register_group<main_component_group_t>(ecs, 1024);
 
             g_register_component<main_component_group_t, u8>();
             g_register_component<main_component_group_t, position_t>();
@@ -226,29 +226,50 @@ UNITTEST_SUITE_BEGIN(ecs2)
             g_add_cp<position_t>(e03);
 
             g_add_cp<velocity_t>(e01);
+            g_add_cp<velocity_t>(e02);
             g_add_cp<velocity_t>(e03);
 
             g_add_tag<enemy_tag_t>(e01);
             g_add_tag<enemy_tag_t>(e02);
             g_add_tag<enemy_tag_t>(e03);
 
-            en_iterator_t iter(ecs);
-
-            iter.set_cp_type<u8>();
-            iter.set_cp_type<position_t>();
-            iter.set_tg_type<enemy_tag_t>();
-
-            iter.begin();
-            while (!iter.end())
             {
-                entity_t e = iter.entity();
-                CHECK_TRUE(e == e01 || e == e03);
+                en_iterator_t iter(ecs);
 
-                CHECK_TRUE(g_has_cp<u8>(e));
-                CHECK_TRUE(g_has_cp<position_t>(e));
-                CHECK_TRUE(g_has_tag<enemy_tag_t>(e));
+                iter.set_cp_type<u8>();
+                iter.set_cp_type<position_t>();
+                iter.set_tg_type<enemy_tag_t>();
 
-                iter.next();
+                iter.begin();
+                while (!iter.end())
+                {
+                    entity_t e = iter.entity();
+                    CHECK_TRUE(e == e01 || e == e03);
+
+                    CHECK_TRUE(g_has_cp<u8>(e));
+                    CHECK_TRUE(g_has_cp<position_t>(e));
+                    CHECK_TRUE(g_has_tag<enemy_tag_t>(e));
+
+                    iter.next();
+                }
+            }
+            {
+                en_iterator_t iter(ecs);
+
+                iter.set_cp_type<velocity_t>();
+                iter.set_tg_type<enemy_tag_t>();
+
+                iter.begin();
+                while (!iter.end())
+                {
+                    entity_t e = iter.entity();
+                    CHECK_TRUE(e == e01 || e == e02 || e == e03);
+
+                    CHECK_TRUE(g_has_cp<velocity_t>(e));
+                    CHECK_TRUE(g_has_tag<enemy_tag_t>(e));
+
+                    iter.next();
+                }
             }
 
             g_destroy_entity(ecs, e01);
@@ -262,7 +283,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
 
             g_unregister_tag<main_component_group_t, enemy_tag_t>();
 
-            g_unregister_cp_group<main_component_group_t>();
+            g_unregister_group<main_component_group_t>();
 
             g_destroy_ecs(ecs);
         }

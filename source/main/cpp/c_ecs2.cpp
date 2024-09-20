@@ -112,8 +112,11 @@ namespace ncore
         {
             ASSERT(cp_index >= 0 && cp_index < 32);
             group->m_cp_used &= ~(1 << cp_index);
-            group->m_allocator->deallocate(group->m_a_en_cp_data[cp_index]);
-            group->m_a_en_cp_data[cp_index] = nullptr;
+            if (group->m_a_en_cp_data[cp_index] != nullptr)
+            {
+                group->m_allocator->deallocate(group->m_a_en_cp_data[cp_index]);
+                group->m_a_en_cp_data[cp_index] = nullptr;
+            }
         }
 
         // Component Type Manager
@@ -277,7 +280,7 @@ namespace ncore
         static void s_unregister_group(cp_group_mgr_t* cp_group_mgr, cg_type_t* cp_group)
         {
             cp_group_mgr->m_cp_groups_used &= ~((u64)1 << cp_group->m_group_index);
-            s_cp_group_init(cp_group);
+            s_cp_group_destruct(cp_group);
         }
 
         // --------------------------------------------------------------------------------------------------------

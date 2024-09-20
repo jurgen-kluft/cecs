@@ -77,13 +77,13 @@ namespace ncore
         // Register a Component Group with an ECS
         extern cg_type_t*          g_register_cp_group(ecs_t* ecs, u32 cg_max_entities, const char* cg_name);
         extern void                g_unregister_cp_group(ecs_t* ecs, cg_type_t* cg_type);
-        template <typename T> void g_register_cp_group(ecs_t* ecs, u32 max_entities)
+        template <typename T> void g_register_group(ecs_t* ecs, u32 max_entities)
         {
             ASSERTS(cg_typeinfo_t<T>::cg_ecs == nullptr, "Component group already registered");
             cg_typeinfo_t<T>::cg_ecs  = ecs;
             cg_typeinfo_t<T>::cg_type = g_register_cp_group(ecs, max_entities, cg_typeinfo_t<T>::cg_name);
         }
-        template <typename T> void g_unregister_cp_group()
+        template <typename T> void g_unregister_group()
         {
             ASSERTS(cg_typeinfo_t<T>::cg_ecs != nullptr, "Component group is not registered");
             g_unregister_cp_group(cg_typeinfo_t<T>::cg_ecs, cg_typeinfo_t<T>::cg_type);
