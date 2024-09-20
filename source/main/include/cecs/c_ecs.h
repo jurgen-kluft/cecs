@@ -23,6 +23,9 @@ namespace ncore
             const char* const cp_name;   // Name of the component
         };
 
+        // Multi-Thread safe global component type id
+        s32 get_global_cp_id();
+
         // Tag Type - identifier information
         // Note: The user needs to create them like tg_type_t enemy_tag = { -1, "enemy" }; and register them at the ECS
         struct tg_type_t
