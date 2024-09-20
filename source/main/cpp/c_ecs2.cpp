@@ -244,7 +244,7 @@ namespace ncore
 
         static void s_exit(cp_group_mgr_t* cp_group_mgr, alloc_t* allocator)
         {
-            u32 groups_used = cp_group_mgr->m_cp_groups_used;
+            u64 groups_used = cp_group_mgr->m_cp_groups_used;
             while (groups_used != 0)
             {
                 s32 index = math::findFirstBit(groups_used);
@@ -441,7 +441,7 @@ namespace ncore
 
             u32 const          entity_index    = s_entity_index(e);
             entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
-            if (entity_instance.m_cp_groups & (1 << cp_group_index))
+            if (entity_instance.m_cp_groups & ((u64)1 << cp_group_index))
             {
                 // How many '1' bits are there before in 'm_cp_group_cp_used'
                 u32 const gb      = entity_instance.m_cp_groups & ((1 << cp_group_index) - 1);
