@@ -24,6 +24,8 @@ and performance.
 struct base_group_t
 {
 };
+REGISTER_ECS_GROUP(base_group_t);
+DECLARE_ECS_GROUP(base_group_t);
 
 // Entity Component System; create and destroy
 ecs_t* ecs = g_create_ecs(alloc_t*, 1024);
@@ -41,6 +43,8 @@ struct position_t
 {
     float x,y,z;
 };
+REGISTER_ECS_COMPONENT(position_t);
+DECLARE_ECS_COMPONENT(position_t);
 
 // Register a component type in a component group
 g_register_component<base_group_t, position_t>();
@@ -57,6 +61,8 @@ if (g_has_cp(ecs, e, cp_type_pos))
 struct alerted_t
 {
 };
+REGISTER_ECS_TAG(alerted_t);
+DECLARE_ECS_TAG_NAMED(alerted_t, "alerted tag");
 
 g_register_tag<base_group_t, alerted_t>();
 

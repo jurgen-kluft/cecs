@@ -210,8 +210,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
             g_add_tag<enemy_tag_t>(e02);
             g_add_tag<enemy_tag_t>(e03);
 
-            en_iterator_t iter;
-            iter.init(ecs);
+            en_iterator_t iter(ecs);
 
             iter.set_cp_type<u8>();
             iter.set_cp_type<position_t>();
