@@ -14,7 +14,7 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // type definitions and utility functions
-        static inline entity_t       s_entity_make(entity_genid_t genid, entity_index_t index) { return ((u32)genid << ECS_ENTITY_GEN_SHIFT) | (index & ECS_ENTITY_INDEX_MASK); }
+        static inline entity_t s_entity_make(entity_genid_t genid, entity_index_t index) { return ((u32)genid << ECS_ENTITY_GEN_SHIFT) | (index & ECS_ENTITY_INDEX_MASK); }
 
         // Component Type, cp_type_t and tg_type_t
         struct cp_type_t
@@ -30,8 +30,7 @@ namespace ncore
         struct cg_type_t
         {
             const char* m_name;             // The name of the component group
-            hbb_hdr_t   m_en_hbb_hdr;       // The header for the hbb data, this is used to keep track of which entities are used
-            hbb_data_t  m_en_hbb_data;      // For iteration, which entities are used
+            binmap_t    m_en_binmap;        // For iteration, which entities are used
             u32         m_max_entities;     // Maximum number of entities in this group
             u32         m_cp_used;          // Each bit represents if for this group the component is free or used
             byte*       m_a_en_cp_data[32]; // The component data array per component type
@@ -41,8 +40,7 @@ namespace ncore
 
         static void s_cp_group_init(cg_type_t* group)
         {
-            group->m_en_hbb_hdr   = hbb_hdr_t();
-            group->m_en_hbb_data  = nullptr;
+            group->m_en_binmap.reset();
             group->m_max_entities = 0;
             group->m_cp_used      = 0;
             for (u32 i = 0; i < 32; ++i)
@@ -58,8 +56,7 @@ namespace ncore
                 group->m_allocator    = allocator;
                 group->m_group_index  = index;
                 group->m_max_entities = max_entities;
-                g_hbb_init(group->m_en_hbb_hdr, max_entities);
-                g_hbb_init(group->m_en_hbb_hdr, group->m_en_hbb_data, 1, allocator);
+                group->m_en_binmap.init_all_free(max_entities, allocator);
             }
         }
         static void s_cp_group_destruct(cg_type_t* group)
@@ -73,7 +70,7 @@ namespace ncore
                     allocator->deallocate(group->m_a_en_cp_data[index]);
                 cp_used &= ~(1 << index);
             }
-            allocator->deallocate(group->m_en_hbb_data);
+            group->m_en_binmap.release(allocator);
             s_cp_group_init(group);
         }
 
@@ -109,9 +106,8 @@ namespace ncore
         // Component Type Manager
         struct cp_type_mgr_t
         {
-            hbb_hdr_t  m_cp_hbb_hdr;  // The header for the hbb data
-            hbb_data_t m_cp_hbb_data; // 2 * max_components bytes; To identify which component stores are still free (to give out new component type)
-            cp_type_t* m_a_cp_type;   // 8 bytes; The type information attached to each store
+            binmap_t   m_cp_binmap; // 2 * max_components bytes; To identify which component stores are still free (to give out new component type)
+            cp_type_t* m_a_cp_type; // 8 bytes; The type information attached to each store
         };
 
         // Component Group Manager
@@ -136,11 +132,10 @@ namespace ncore
 
         struct entity_mgr_t
         {
-            hbb_hdr_t          m_entity_hdr;        // The header for the hbb data of dead and alive Asentities
-            hbb_data_t         m_entity_dead_data;  // Which entities are dead
-            hbb_data_t         m_entity_alive_data; // Which entities are alive
-            entity_genid_t*    m_a_entity_ver;      // The generation Id of each entity
-            entity_instance_t* m_a_entity;          // The array of entities entries
+            binmap_t           m_free_entities;  // Which entities are dead
+            binmap_t           m_alive_entities; // Which entities are alive
+            entity_genid_t*    m_a_entity_ver;   // The generation Id of each entity
+            entity_instance_t* m_a_entity;       // The array of entities entries
         };
 
         struct ecs_t
@@ -158,36 +153,29 @@ namespace ncore
 
         static void s_init(cp_type_mgr_t* cps, u32 max_components, alloc_t* allocator)
         {
-            cps->m_cp_hbb_hdr  = hbb_hdr_t();
-            cps->m_cp_hbb_data = nullptr;
-            cps->m_a_cp_type   = nullptr;
-
-            g_hbb_init(cps->m_cp_hbb_hdr, max_components);
-            g_hbb_init(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, 1, allocator);
+            cps->m_cp_binmap.reset();
+            cps->m_cp_binmap.init_all_free(max_components, allocator);
             cps->m_a_cp_type = (cp_type_t*)allocator->allocate(sizeof(cp_type_t) * max_components);
         }
 
         static void s_exit(cp_type_mgr_t* cps, alloc_t* allocator)
         {
             allocator->deallocate(cps->m_a_cp_type);
-            allocator->deallocate(cps->m_cp_hbb_data);
-
-            cps->m_cp_hbb_hdr  = hbb_hdr_t();
-            cps->m_cp_hbb_data = nullptr;
-            cps->m_a_cp_type   = nullptr;
+            cps->m_cp_binmap.release(allocator);
+            cps->m_a_cp_type = nullptr;
         }
 
         static cp_type_t* s_register_cp_type(cp_type_mgr_t* cps, cg_type_t* cp_group, const char* cp_name, s32 cp_sizeof, s32 cp_alignof)
         {
-            u32 cp_id = 0;
-            if (g_hbb_find(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, cp_id))
+            s32 const cp_id = cps->m_cp_binmap.find();
+            if (cp_id >= 0)
             {
                 cp_type_t* cp_type      = (cp_type_t*)&cps->m_a_cp_type[cp_id];
                 cp_type->cp_name        = cp_name;
                 cp_type->cp_sizeof      = cp_sizeof;
                 cp_type->cp_alignof     = cp_alignof;
                 cp_type->cp_group_index = cp_group->m_group_index;
-                g_hbb_clr(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, cp_id);
+                cps->m_cp_binmap.set_used(cp_id);
 
                 // Register a component in the component group
                 cp_type->cp_group_cp_index = s_cp_group_register_cp(cp_group, cp_type);
@@ -200,11 +188,11 @@ namespace ncore
         static void s_unregister_cp_type(cp_type_mgr_t* cps, cp_type_t* cp_type, cp_group_mgr_t* cp_group_mgr)
         {
             u32 const cp_id = (u32)(cp_type - cps->m_a_cp_type);
-            if (g_hbb_is_set(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, cp_id) == false)
+            if (cps->m_cp_binmap.is_used(cp_id))
             {
                 cg_type_t* group = &cp_group_mgr->m_cp_groups[cp_type->cp_group_index];
                 s_cp_group_unregister_cp(group, cp_type->cp_group_cp_index);
-                g_hbb_set(cps->m_cp_hbb_hdr, cps->m_cp_hbb_data, cp_id);
+                cps->m_cp_binmap.set_free(cp_id);
             }
         }
 
@@ -277,13 +265,11 @@ namespace ncore
 
         static void s_init(entity_mgr_t* entity_mgr, u32 max_entities, alloc_t* allocator)
         {
-            entity_mgr->m_entity_hdr        = hbb_hdr_t();
-            entity_mgr->m_entity_dead_data  = nullptr;
-            entity_mgr->m_entity_alive_data = nullptr;
+            entity_mgr->m_free_entities.reset();
+            entity_mgr->m_alive_entities.reset();
 
-            g_hbb_init(entity_mgr->m_entity_hdr, max_entities);
-            g_hbb_init(entity_mgr->m_entity_hdr, entity_mgr->m_entity_dead_data, 1, allocator);
-            g_hbb_init(entity_mgr->m_entity_hdr, entity_mgr->m_entity_alive_data, 0, allocator);
+            entity_mgr->m_free_entities.init_all_free(max_entities, allocator);
+            entity_mgr->m_alive_entities.init_all_used(max_entities, allocator);
 
             entity_mgr->m_a_entity_ver = (entity_genid_t*)allocator->allocate(sizeof(entity_genid_t) * max_entities);
             entity_mgr->m_a_entity     = (entity_instance_t*)allocator->allocate(sizeof(entity_instance_t) * max_entities);
@@ -291,10 +277,11 @@ namespace ncore
 
         static bool s_create_entity(entity_mgr_t* entity_mgr, entity_index_t& index)
         {
-            if (g_hbb_find(entity_mgr->m_entity_hdr, entity_mgr->m_entity_dead_data, index))
+            index = entity_mgr->m_free_entities.find();
+            if (index >= 0)
             {
-                g_hbb_clr(entity_mgr->m_entity_hdr, entity_mgr->m_entity_dead_data, index);
-                g_hbb_set(entity_mgr->m_entity_hdr, entity_mgr->m_entity_alive_data, index);
+                entity_mgr->m_free_entities.set_used(index);
+                entity_mgr->m_alive_entities.set_free(index);
                 return true;
             }
             return false;
@@ -302,20 +289,18 @@ namespace ncore
 
         static void s_destroy_entity(entity_mgr_t* entity_mgr, entity_index_t index)
         {
-            g_hbb_set(entity_mgr->m_entity_hdr, entity_mgr->m_entity_dead_data, index);
-            g_hbb_clr(entity_mgr->m_entity_hdr, entity_mgr->m_entity_alive_data, index);
+            entity_mgr->m_free_entities.set_free(index);
+            entity_mgr->m_alive_entities.set_used(index);
         }
 
         static void s_exit(entity_mgr_t* entity_mgr, alloc_t* allocator)
         {
             allocator->deallocate(entity_mgr->m_a_entity);
             allocator->deallocate(entity_mgr->m_a_entity_ver);
-            allocator->deallocate(entity_mgr->m_entity_dead_data);
-            allocator->deallocate(entity_mgr->m_entity_alive_data);
-            entity_mgr->m_a_entity          = nullptr;
-            entity_mgr->m_a_entity_ver      = nullptr;
-            entity_mgr->m_entity_dead_data  = nullptr;
-            entity_mgr->m_entity_alive_data = nullptr;
+            entity_mgr->m_a_entity     = nullptr;
+            entity_mgr->m_a_entity_ver = nullptr;
+            entity_mgr->m_free_entities.release(allocator);
+            entity_mgr->m_alive_entities.release(allocator);
         }
 
         // --------------------------------------------------------------------------------------------------------
@@ -499,7 +484,7 @@ namespace ncore
         {
             m_ecs              = ecs;
             m_entity_index     = 0;
-            m_entity_index_max = ecs->m_entity_mgr.m_entity_hdr.get_max_bits();
+            m_entity_index_max = ecs->m_entity_mgr.m_alive_entities.size();
             m_group_mask       = 0; // The group mask
             for (s16 i = 0; i < 7; ++i)
                 m_group_cp_mask[i] = 0; // An entity cannot be in more than 7 component groups
@@ -530,18 +515,14 @@ namespace ncore
 
         static inline s32 s_first_entity(entity_mgr_t* mgr)
         {
-            u32 index;
-            if (g_hbb_find(mgr->m_entity_hdr, mgr->m_entity_alive_data, index))
-                return (s32)index;
-            return -1;
+            s32 const index = mgr->m_alive_entities.find();
+            return (s32)index;
         }
 
         static inline s32 s_next_entity(entity_mgr_t* mgr, u32 index)
         {
-            u32 next_index;
-            if (g_hbb_upper(mgr->m_entity_hdr, mgr->m_entity_alive_data, index, next_index))
-                return (s32)next_index;
-            return -1;
+            s32 const next_index = mgr->m_alive_entities.upper(index);
+            return next_index;
         }
 
         static s32 s_search_matching_entity(en_iterator_t& iter)
