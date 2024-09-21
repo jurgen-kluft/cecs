@@ -9,8 +9,18 @@ namespace ncore
 {
     namespace necs2
     {
-        typedef u32           entity_t;
-        extern const entity_t g_null_entity;
+        typedef u32 entity_t;
+        typedef u8  entity_genid_t;
+        typedef u32 entity_index_t;
+
+        const u32 ECS_ENTITY_NULL        = (0xFFFFFFFF); // Null entity
+        const u32 ECS_ENTITY_INDEX_MASK  = (0x00FFFFFF); // Mask to use to get the entity index from an entity identifier
+        const u32 ECS_ENTITY_GEN_ID_MASK = (0xFF000000); // Mask to use to get the generation id from an entity identifier
+        const s8  ECS_ENTITY_GEN_SHIFT   = (24);         // Extent of the entity id + type within an identifier
+
+        inline bool           s_entity_isnull(entity_t e) { return e == ECS_ENTITY_NULL; }
+        inline entity_genid_t s_entity_genid(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_SHIFT; }
+        inline entity_index_t s_entity_index(entity_t e) { return (entity_index_t)e & ECS_ENTITY_INDEX_MASK; }
 
         struct ecs_t;
         struct cp_type_t;
@@ -197,7 +207,7 @@ namespace ncore
             g_rem_tag(ecs, entity, tg_type);
         }
 
-        struct en_iterator_t // 56 bytes
+        struct en_iterator_t
         {
             ecs_t* m_ecs;              // The ECS
             u64    m_group_mask;       // The group mask, there cannot be more than a total of 64 component groups
@@ -223,12 +233,11 @@ namespace ncore
             }
 
             // Example:
-            //     en_iterator_t iter;
-            //     iter.init(ecs);
+            //     en_iterator_t iter(ecs);
             //
-            //     iter.set_cp_type(position_cp_type);
-            //     iter.set_cp_type(velocity_cp_type);
-            //     iter.set_tg_type(enemy_tag);
+            //     iter.set_cp_type<position_t>();
+            //     iter.set_cp_type<velocity_t>();
+            //     iter.set_tg_type<enemy_tag_t>();
             //
             //     iter.begin();
             //     while (!iter.end())

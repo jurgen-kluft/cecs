@@ -10,24 +10,11 @@ namespace ncore
 {
     namespace necs2
     {
-        const entity_t g_null_entity = (entity_t)0xFFFFFFFF;
-
-        typedef u8  entity_gen_id_t;
-        typedef u32 entity_index_t;
-
-        const u32 ECS_ENTITY_INDEX_MASK  = (0x00FFFFFF); // Mask to use to get the entity number out of an identifier
-        const u32 ECS_ENTITY_GEN_ID_MASK = (0xFF000000); // Mask to use to get the generation id out of an identifier
-        const u32 ECS_ENTITY_GEN_ID_MAX  = (0x000000FF); // Maximum generation id
-        const s8  ECS_ENTITY_GEN_SHIFT   = (24);         // Extent of the entity id + type within an identifier
-
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // type definitions and utility functions
-
-        static inline entity_gen_id_t s_entity_gen(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_SHIFT; }
-        static inline entity_index_t  s_entity_index(entity_t e) { return (entity_index_t)e & ECS_ENTITY_INDEX_MASK; }
-        static inline entity_t        s_make_entity(entity_gen_id_t gen, u32 id) { return ((u32)gen << ECS_ENTITY_GEN_SHIFT) | (id & ECS_ENTITY_INDEX_MASK); }
+        static inline entity_t       s_entity_make(entity_genid_t genid, entity_index_t index) { return ((u32)genid << ECS_ENTITY_GEN_SHIFT) | (index & ECS_ENTITY_INDEX_MASK); }
 
         // Component Type, cp_type_t and tg_type_t
         struct cp_type_t
@@ -152,7 +139,7 @@ namespace ncore
             hbb_hdr_t          m_entity_hdr;        // The header for the hbb data of dead and alive Asentities
             hbb_data_t         m_entity_dead_data;  // Which entities are dead
             hbb_data_t         m_entity_alive_data; // Which entities are alive
-            entity_gen_id_t*   m_a_entity_ver;      // The generation Id of each entity
+            entity_genid_t*    m_a_entity_ver;      // The generation Id of each entity
             entity_instance_t* m_a_entity;          // The array of entities entries
         };
 
@@ -298,7 +285,7 @@ namespace ncore
             g_hbb_init(entity_mgr->m_entity_hdr, entity_mgr->m_entity_dead_data, 1, allocator);
             g_hbb_init(entity_mgr->m_entity_hdr, entity_mgr->m_entity_alive_data, 0, allocator);
 
-            entity_mgr->m_a_entity_ver = (entity_gen_id_t*)allocator->allocate(sizeof(entity_gen_id_t) * max_entities);
+            entity_mgr->m_a_entity_ver = (entity_genid_t*)allocator->allocate(sizeof(entity_genid_t) * max_entities);
             entity_mgr->m_a_entity     = (entity_instance_t*)allocator->allocate(sizeof(entity_instance_t) * max_entities);
         }
 
@@ -476,17 +463,17 @@ namespace ncore
                     entity_instance.m_cp_group_en_index[i] = 0;
                 }
 
-                entity_gen_id_t& gen_id = ecs->m_entity_mgr.m_a_entity_ver[entity_index];
+                entity_genid_t& gen_id = ecs->m_entity_mgr.m_a_entity_ver[entity_index];
                 gen_id += 1;
-                return s_make_entity(gen_id, entity_index);
+                return s_entity_make(gen_id, entity_index);
             }
-            return g_null_entity;
+            return ECS_ENTITY_NULL;
         }
 
         void g_destroy_entity(ecs_t* ecs, entity_t e)
         {
-            entity_gen_id_t const gen_id = s_entity_gen(e);
-            entity_gen_id_t const cur_id = ecs->m_entity_mgr.m_a_entity_ver[s_entity_index(e)];
+            entity_genid_t const gen_id = s_entity_genid(e);
+            entity_genid_t const cur_id = ecs->m_entity_mgr.m_a_entity_ver[s_entity_index(e)];
             // NOTE Do we verify the generation id and if it doesn't match we do not delete the entity?
             if (gen_id != cur_id)
                 return;
@@ -611,7 +598,7 @@ namespace ncore
             }
         }
 
-        entity_t en_iterator_t::entity() const { return s_make_entity(m_ecs->m_entity_mgr.m_a_entity_ver[m_entity_index], m_entity_index); }
+        entity_t en_iterator_t::entity() const { return s_entity_make(m_ecs->m_entity_mgr.m_a_entity_ver[m_entity_index], m_entity_index); }
 
         void en_iterator_t::next()
         {

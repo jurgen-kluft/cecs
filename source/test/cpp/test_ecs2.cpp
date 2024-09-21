@@ -228,6 +228,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
             g_add_cp<velocity_t>(e01);
             g_add_cp<velocity_t>(e02);
             g_add_cp<velocity_t>(e03);
+            g_add_cp<velocity_t>(e04);
 
             g_add_tag<enemy_tag_t>(e01);
             g_add_tag<enemy_tag_t>(e02);
@@ -271,17 +272,36 @@ UNITTEST_SUITE_BEGIN(ecs2)
                     iter.next();
                 }
             }
+            {
+                en_iterator_t iter(ecs);
+
+                // Iterate all the entities
+
+                s32 index = 0;
+                iter.begin();
+                while (!iter.end())
+                {
+                    entity_t e = iter.entity();
+                    CHECK_TRUE(e == e01 && index == 0);
+                    CHECK_TRUE(e == e02 && index == 1);
+                    CHECK_TRUE(e == e03 && index == 2);
+                    CHECK_TRUE(e == e04 && index == 3);
+
+                    CHECK_TRUE(g_has_cp<velocity_t>(e));
+
+                    iter.next();
+                }
+            }
 
             g_destroy_entity(ecs, e01);
             g_destroy_entity(ecs, e02);
             g_destroy_entity(ecs, e03);
             g_destroy_entity(ecs, e04);
 
-            g_unregister_component<main_component_group_t, velocity_t>();
             g_unregister_component<main_component_group_t, position_t>();
-            g_unregister_component<main_component_group_t, u8>();
-
             g_unregister_tag<main_component_group_t, enemy_tag_t>();
+            g_unregister_component<main_component_group_t, velocity_t>();
+            g_unregister_component<main_component_group_t, u8>();
 
             g_unregister_group<main_component_group_t>();
 
