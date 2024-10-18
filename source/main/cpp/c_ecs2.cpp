@@ -1,7 +1,7 @@
 #include "ccore/c_target.h"
 #include "ccore/c_allocator.h"
 #include "ccore/c_debug.h"
-#include "cbase/c_hbb.h"
+#include "cbase/c_duomap.h"
 #include "cbase/c_integer.h"
 
 #include "cecs/c_ecs2.h"
@@ -56,7 +56,8 @@ namespace ncore
                 group->m_allocator    = allocator;
                 group->m_group_index  = index;
                 group->m_max_entities = max_entities;
-                group->m_en_binmap.init_all_free(max_entities, allocator);
+                binmap_t::config_t cfg = binmap_t::config_t::compute(max_entities);
+                group->m_en_binmap.init_all_free(cfg, allocator);
             }
         }
         static void s_cp_group_destruct(cg_type_t* group)
@@ -132,10 +133,9 @@ namespace ncore
 
         struct entity_mgr_t
         {
-            binmap_t           m_free_entities;  // Which entities are dead
-            binmap_t           m_alive_entities; // Which entities are alive
-            entity_genid_t*    m_a_entity_ver;   // The generation Id of each entity
-            entity_instance_t* m_a_entity;       // The array of entities entries
+            duomap_t           m_entity_state; // Which entities are alive/dead
+            entity_genid_t*    m_a_entity_ver; // The generation Id of each entity
+            entity_instance_t* m_a_entity;     // The array of entities entries
         };
 
         struct ecs_t
@@ -154,7 +154,8 @@ namespace ncore
         static void s_init(cp_type_mgr_t* cps, u32 max_components, alloc_t* allocator)
         {
             cps->m_cp_binmap.reset();
-            cps->m_cp_binmap.init_all_free(max_components, allocator);
+            binmap_t::config_t cfg = binmap_t::config_t::compute(max_components);
+            cps->m_cp_binmap.init_all_free(cfg, allocator);
             cps->m_a_cp_type = (cp_type_t*)allocator->allocate(sizeof(cp_type_t) * max_components);
         }
 
@@ -265,11 +266,10 @@ namespace ncore
 
         static void s_init(entity_mgr_t* entity_mgr, u32 max_entities, alloc_t* allocator)
         {
-            entity_mgr->m_free_entities.reset();
-            entity_mgr->m_alive_entities.reset();
+            entity_mgr->m_entity_state.reset();
 
-            entity_mgr->m_free_entities.init_all_free(max_entities, allocator);
-            entity_mgr->m_alive_entities.init_all_used(max_entities, allocator);
+            binmap_t::config_t cfg = binmap_t::config_t::compute(max_entities);
+            entity_mgr->m_entity_state.init_all_free(cfg, allocator);
 
             entity_mgr->m_a_entity_ver = (entity_genid_t*)allocator->allocate(sizeof(entity_genid_t) * max_entities);
             entity_mgr->m_a_entity     = (entity_instance_t*)allocator->allocate(sizeof(entity_instance_t) * max_entities);
@@ -277,11 +277,10 @@ namespace ncore
 
         static bool s_create_entity(entity_mgr_t* entity_mgr, entity_index_t& index)
         {
-            index = entity_mgr->m_free_entities.find();
+            index = entity_mgr->m_entity_state.find_free();
             if (index >= 0)
             {
-                entity_mgr->m_free_entities.set_used(index);
-                entity_mgr->m_alive_entities.set_free(index);
+                entity_mgr->m_entity_state.set_used(index);
                 return true;
             }
             return false;
@@ -289,8 +288,7 @@ namespace ncore
 
         static void s_destroy_entity(entity_mgr_t* entity_mgr, entity_index_t index)
         {
-            entity_mgr->m_free_entities.set_free(index);
-            entity_mgr->m_alive_entities.set_used(index);
+            entity_mgr->m_entity_state.set_free(index);
         }
 
         static void s_exit(entity_mgr_t* entity_mgr, alloc_t* allocator)
@@ -299,8 +297,7 @@ namespace ncore
             allocator->deallocate(entity_mgr->m_a_entity_ver);
             entity_mgr->m_a_entity     = nullptr;
             entity_mgr->m_a_entity_ver = nullptr;
-            entity_mgr->m_free_entities.release(allocator);
-            entity_mgr->m_alive_entities.release(allocator);
+            entity_mgr->m_entity_state.release(allocator);
         }
 
         // --------------------------------------------------------------------------------------------------------
@@ -484,7 +481,7 @@ namespace ncore
         {
             m_ecs              = ecs;
             m_entity_index     = 0;
-            m_entity_index_max = ecs->m_entity_mgr.m_alive_entities.size();
+            m_entity_index_max = ecs->m_entity_mgr.m_entity_state.size();
             m_group_mask       = 0; // The group mask
             for (s16 i = 0; i < 7; ++i)
                 m_group_cp_mask[i] = 0; // An entity cannot be in more than 7 component groups
@@ -515,13 +512,14 @@ namespace ncore
 
         static inline s32 s_first_entity(entity_mgr_t* mgr)
         {
-            s32 const index = mgr->m_alive_entities.find();
+            s32 const index = mgr->m_entity_state.find_used();
             return (s32)index;
         }
 
         static inline s32 s_next_entity(entity_mgr_t* mgr, u32 index)
         {
-            s32 const next_index = mgr->m_alive_entities.upper(index);
+            index += 1;
+            s32 const next_index = mgr->m_entity_state.upper_used(index);
             return next_index;
         }
 

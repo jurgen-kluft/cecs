@@ -1,7 +1,7 @@
 #include "ccore/c_target.h"
 #include "ccore/c_allocator.h"
 #include "ccore/c_debug.h"
-#include "cbase/c_hbb.h"
+#include "cbase/c_binmap.h"
 #include "cbase/c_integer.h"
 #include "cbase/c_memory.h"
 
@@ -133,7 +133,8 @@ namespace ncore
         {
             // g_hbb_init(cps->m_a_cp_hbb_hdr, cp_type_mgr_t::COMPONENTS_MAX);
             // g_hbb_init(cps->m_a_cp_hbb_hdr, cps->m_a_cp_hbb, 1);
-            cps->m_a_cp_hbb.init_all_free(cp_type_mgr_t::COMPONENTS_MAX, allocator);
+            binmap_t::config_t cfg = binmap_t::config_t::compute(cp_type_mgr_t::COMPONENTS_MAX);
+            cps->m_a_cp_hbb.init_all_free(cfg, allocator);
             cps->m_a_cp_type = (cp_type_t*)allocator->allocate(sizeof(cp_type_t) * cp_type_mgr_t::COMPONENTS_MAX);
         }
 
@@ -197,7 +198,8 @@ namespace ncore
         {
             // g_hbb_init(ts->m_a_tg_hbb_hdr, tg_type_mgr_t::TAGS_MAX);
             // g_hbb_init(ts->m_a_tg_hbb_hdr, ts->m_tg_hbb, 1);
-            ts->m_tg_hbb.init_all_free(tg_type_mgr_t::TAGS_MAX, allocator);
+            binmap_t::config_t cfg = binmap_t::config_t::compute(tg_type_mgr_t::TAGS_MAX);
+            ts->m_tg_hbb.init_all_free(cfg, allocator);
             ts->m_a_tg_type = (tg_type_t*)allocator->allocate(sizeof(tg_type_t) * tg_type_mgr_t::TAGS_MAX);
         }
 
@@ -320,7 +322,6 @@ namespace ncore
             }
         }
 
-
         static en_type_t* s_register_entity_type(en_type_mgr_t* es, u32 max_entities, alloc_t* allocator)
         {
             s32 entity_type_id = es->m_entity_type_free_hbb.find();
@@ -360,14 +361,17 @@ namespace ncore
                 // g_hbb_init(et->m_tg_hbb_hdr, et->m_tg_hbb, 0);
                 // g_hbb_init(et->m_cp_hbb_hdr, cp_type_mgr_t::COMPONENTS_MAX);
                 // g_hbb_init(et->m_cp_hbb_hdr, et->m_cp_hbb, 0);
-                et->m_tg_hbb.init_all_free(tg_type_mgr_t::TAGS_MAX, allocator);
-                et->m_cp_hbb.init_all_free(cp_type_mgr_t::COMPONENTS_MAX, allocator);
+                binmap_t::config_t tgcfg = binmap_t::config_t::compute(tg_type_mgr_t::TAGS_MAX);
+                et->m_tg_hbb.init_all_free(tgcfg, allocator);
+                binmap_t::config_t cpcfg = binmap_t::config_t::compute(cp_type_mgr_t::COMPONENTS_MAX);
+                et->m_cp_hbb.init_all_free(cpcfg, allocator);
 
                 // g_hbb_init(et->m_entity_hbb_hdr, max_entities);
                 // g_hbb_init(et->m_entity_hbb_hdr, et->m_entity_free_hbb, 1, allocator);
                 // g_hbb_init(et->m_entity_hbb_hdr, et->m_entity_used_hbb, 0, allocator);
-                et->m_entity_free_hbb.init_all_free(max_entities, allocator);
-                et->m_entity_used_hbb.init_all_used(max_entities, allocator);
+                binmap_t::config_t cfg = binmap_t::config_t::compute(max_entities);
+                et->m_entity_free_hbb.init_all_free(cfg, allocator);
+                et->m_entity_used_hbb.init_all_used(cfg, allocator);
 
                 return et;
             }
@@ -425,8 +429,9 @@ namespace ncore
             // g_hbb_init(es->m_entity_type_hbb_hdr, en_type_mgr_t::ENTITY_TYPE_MAX);
             // g_hbb_init(es->m_entity_type_hbb_hdr, es->m_entity_type_free_hbb, 1);
             // g_hbb_init(es->m_entity_type_hbb_hdr, es->m_entity_type_used_hbb, 0);
-            es->m_entity_type_free_hbb.init_all_free(en_type_mgr_t::ENTITY_TYPE_MAX, allocator);
-            es->m_entity_type_used_hbb.init_all_used(en_type_mgr_t::ENTITY_TYPE_MAX, allocator);
+            binmap_t::config_t cfg = binmap_t::config_t::compute(en_type_mgr_t::ENTITY_TYPE_MAX);
+            es->m_entity_type_free_hbb.init_all_free(cfg, allocator);
+            es->m_entity_type_used_hbb.init_all_used(cfg, allocator);
 
             es->m_entity_type_array = (en_type_t**)allocator->allocate(sizeof(en_type_t*) * (en_type_mgr_t::ENTITY_TYPE_MAX));
             for (s32 i = 0; i < en_type_mgr_t::ENTITY_TYPE_MAX; ++i)
@@ -514,7 +519,8 @@ namespace ncore
                 cp_store_data   = (u8*)ecs->m_allocator->allocate(count * cp_type.cp_sizeof);
                 // u32* cp_store_hbb = (u32*)ecs->m_allocator->allocate(sizeof(u32) * g_hbb_sizeof_data(count));
                 // g_hbb_init(entity_type->m_cp_hbb_hdr, cp_store_hbb, 0);
-                entity_type->m_a_cp_store_hbb[cp_type.cp_id].init_all_free(count, ecs->m_allocator);
+                binmap_t::config_t cfg = binmap_t::config_t::compute(count);
+                entity_type->m_a_cp_store_hbb[cp_type.cp_id].init_all_free(cfg, ecs->m_allocator);
 
                 // entity_type->m_a_cp_store_hbb[cp_type.cp_id] = cp_store_hbb;
                 // g_hbb_set(entity_type->m_cp_hbb_hdr, entity_type->m_cp_hbb, cp_type.cp_id);
@@ -559,7 +565,8 @@ namespace ncore
                 // g_hbb_init(entity_type->m_tg_hbb_hdr, tag_hbb, 0, ecs->m_allocator);
                 // entity_type->m_tg_hbb[tg_type.tg_id] = tag_hbb;
                 // g_hbb_set(entity_type->m_tg_hbb_hdr, entity_type->m_tg_hbb, tg_type.tg_id);
-                tag_hbb.init_all_free(entity_type->m_max_entities, ecs->m_allocator);
+                binmap_t::config_t cfg = binmap_t::config_t::compute(entity_type->m_max_entities);
+                tag_hbb.init_all_free(cfg, ecs->m_allocator);
                 tag_hbb.set_used(tg_type.tg_id);
             }
             // Now set the mark for this entity to indicate the tag is attached
