@@ -29,6 +29,12 @@ namespace ncore
         bool at_rest;
     };
 
+    struct u8_t
+    {
+        DECLARE_ECS_COMPONENT(3);
+        u8 value;
+    };
+
     struct enemy_tag_t
     {
         DECLARE_ECS_TAG(0);
@@ -77,7 +83,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
 
             g_register_group<main_component_group_t>(ecs, "main group", 1024);
 
-            g_register_component<main_component_group_t, u8>(ecs, "u8");
+            g_register_component<main_component_group_t, u8_t>(ecs, "u8");
             g_register_component<main_component_group_t, position_t>(ecs, "position");
             g_register_component<main_component_group_t, velocity_t>(ecs, "velocity");
             g_register_component<main_component_group_t, physics_state_t>(ecs, "physics state");
@@ -85,7 +91,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
             g_unregister_component<main_component_group_t, physics_state_t>(ecs);
             g_unregister_component<main_component_group_t, velocity_t>(ecs);
             g_unregister_component<main_component_group_t, position_t>(ecs);
-            g_unregister_component<main_component_group_t, u8>(ecs);
+            g_unregister_component<main_component_group_t, u8_t>(ecs);
 
             g_unregister_group<main_component_group_t>(ecs);
 
@@ -153,16 +159,16 @@ UNITTEST_SUITE_BEGIN(ecs2)
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
             g_register_group<main_component_group_t>(ecs, "main group", 1024);
-            g_register_component<main_component_group_t, u8>(ecs, "");
+            g_register_component<main_component_group_t, u8_t>(ecs, "");
 
             entity_t e01 = g_create_entity(ecs);
-            g_add_cp<u8>(ecs, e01);
+            g_add_cp<u8_t>(ecs, e01);
 
-            CHECK_TRUE(g_has_cp<u8>(ecs, e01));
+            CHECK_TRUE(g_has_cp<u8_t>(ecs, e01));
 
             g_destroy_entity(ecs, e01);
 
-            g_unregister_component<main_component_group_t, u8>(ecs);
+            g_unregister_component<main_component_group_t, u8_t>(ecs);
             g_unregister_group<main_component_group_t>(ecs);
 
             g_destroy_ecs(ecs);
@@ -196,7 +202,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
 
             g_register_group<main_component_group_t>(ecs, "main group", 1024);
 
-            g_register_component<main_component_group_t, u8>(ecs, "");
+            g_register_component<main_component_group_t, u8_t>(ecs, "");
             g_register_component<main_component_group_t, position_t>(ecs, "");
             g_register_component<main_component_group_t, velocity_t>(ecs, "");
 
@@ -207,9 +213,9 @@ UNITTEST_SUITE_BEGIN(ecs2)
             entity_t e03 = g_create_entity(ecs);
             entity_t e04 = g_create_entity(ecs);
 
-            g_add_cp<u8>(ecs, e01);
-            g_add_cp<u8>(ecs, e03);
-            g_add_cp<u8>(ecs, e04);
+            g_add_cp<u8_t>(ecs, e01);
+            g_add_cp<u8_t>(ecs, e03);
+            g_add_cp<u8_t>(ecs, e04);
 
             g_add_cp<position_t>(ecs, e01);
             g_add_cp<position_t>(ecs, e03);
@@ -226,7 +232,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
             {
                 en_iterator_t iter(ecs);
 
-                iter.set_cp_type<u8>();
+                iter.set_cp_type<u8_t>();
                 iter.set_cp_type<position_t>();
                 iter.set_tg_type<enemy_tag_t>();
 
@@ -236,7 +242,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
                     entity_t e = iter.entity();
                     CHECK_TRUE(e == e01 || e == e03);
 
-                    CHECK_TRUE(g_has_cp<u8>(ecs, e));
+                    CHECK_TRUE(g_has_cp<u8_t>(ecs, e));
                     CHECK_TRUE(g_has_cp<position_t>(ecs, e));
                     CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e));
 
@@ -290,7 +296,7 @@ UNITTEST_SUITE_BEGIN(ecs2)
             g_unregister_component<main_component_group_t, position_t>(ecs);
             g_unregister_tag<main_component_group_t, enemy_tag_t>(ecs);
             g_unregister_component<main_component_group_t, velocity_t>(ecs);
-            g_unregister_component<main_component_group_t, u8>(ecs);
+            g_unregister_component<main_component_group_t, u8_t>(ecs);
 
             g_unregister_group<main_component_group_t>(ecs);
 
