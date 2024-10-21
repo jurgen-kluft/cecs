@@ -9,8 +9,10 @@ namespace ncore
 {
     namespace necs2
     {
+        // ECS Version 2, a simple Entity-Component-System (ECS) implementation.
+
         typedef u32 entity_t;
-        typedef u8  entity_genid_t;
+        typedef u8  entity_generation_t;
         typedef u32 entity_index_t;
 
         const u32 ECS_ENTITY_NULL        = (0xFFFFFFFF); // Null entity
@@ -18,9 +20,9 @@ namespace ncore
         const u32 ECS_ENTITY_GEN_ID_MASK = (0xFF000000); // Mask to use to get the generation id from an entity identifier
         const s8  ECS_ENTITY_GEN_SHIFT   = (24);         // Extent of the entity id + type within an identifier
 
-        inline bool           s_entity_isnull(entity_t e) { return e == ECS_ENTITY_NULL; }
-        inline entity_genid_t s_entity_genid(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_SHIFT; }
-        inline entity_index_t s_entity_index(entity_t e) { return (entity_index_t)e & ECS_ENTITY_INDEX_MASK; }
+        inline bool                s_entity_is_null(entity_t e) { return e == ECS_ENTITY_NULL; }
+        inline entity_generation_t s_entity_generation(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_SHIFT; }
+        inline entity_index_t      s_entity_index(entity_t e) { return (entity_index_t)e & ECS_ENTITY_INDEX_MASK; }
 
         struct ecs_t;
 
@@ -67,8 +69,8 @@ namespace ncore
 
         extern bool                       g_has_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
         template <typename T> extern bool g_has_cp(ecs_t* ecs, entity_t entity) { return g_has_cp(ecs, entity, T::ECS_COMPONENT_INDEX); }
-        extern void                       g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
-        template <typename T> void        g_add_cp(ecs_t* ecs, entity_t entity) { g_add_cp(ecs, entity, T::ECS_COMPONENT_INDEX); }
+        extern void*                      g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
+        template <typename T> T*          g_add_cp(ecs_t* ecs, entity_t entity) { return (T*)g_add_cp(ecs, entity, T::ECS_COMPONENT_INDEX); }
         extern void                       g_rem_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
         template <typename T> void        g_rem_cp(ecs_t* ecs, entity_t entity) { g_rem_cp(ecs, entity, T::ECS_COMPONENT_INDEX); }
         extern void*                      g_get_cp(ecs_t* ecs, entity_t entity, u32 cp_index);

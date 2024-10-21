@@ -81,12 +81,12 @@ UNITTEST_SUITE_BEGIN(ecs2)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
-            g_register_group<main_component_group_t>(ecs, "main group", 1024);
+            CHECK_TRUE(g_register_group<main_component_group_t>(ecs, "main group", 1024))
 
-            g_register_component<main_component_group_t, u8_t>(ecs, "u8");
-            g_register_component<main_component_group_t, position_t>(ecs, "position");
-            g_register_component<main_component_group_t, velocity_t>(ecs, "velocity");
-            g_register_component<main_component_group_t, physics_state_t>(ecs, "physics state");
+            CHECK_TRUE((g_register_component<main_component_group_t, u8_t>(ecs, "u8")));
+            CHECK_TRUE((g_register_component<main_component_group_t, position_t>(ecs, "position")));
+            CHECK_TRUE((g_register_component<main_component_group_t, velocity_t>(ecs, "velocity")));
+            CHECK_TRUE((g_register_component<main_component_group_t, physics_state_t>(ecs, "physics state")));
 
             g_unregister_component<main_component_group_t, physics_state_t>(ecs);
             g_unregister_component<main_component_group_t, velocity_t>(ecs);
@@ -159,12 +159,24 @@ UNITTEST_SUITE_BEGIN(ecs2)
             ecs_t* ecs = g_create_ecs(Allocator, 1024);
 
             g_register_group<main_component_group_t>(ecs, "main group", 1024);
-            g_register_component<main_component_group_t, u8_t>(ecs, "");
+            g_register_component<main_component_group_t, u8_t>(ecs, "u8");
+            g_register_component<main_component_group_t, position_t>(ecs, "position");
 
             entity_t e01 = g_create_entity(ecs);
-            g_add_cp<u8_t>(ecs, e01);
 
+            u8_t* cpa1 = g_add_cp<u8_t>(ecs, e01);
+            CHECK_NOT_NULL(cpa1);
             CHECK_TRUE(g_has_cp<u8_t>(ecs, e01));
+            u8_t* cp1 = g_get_cp<u8_t>(ecs, e01);
+            CHECK_NOT_NULL(cp1);
+            CHECK_EQUAL(cpa1, cp1);
+
+            position_t* cpa2 = g_add_cp<position_t>(ecs, e01);
+            CHECK_NOT_NULL(cpa2);
+            CHECK_TRUE(g_has_cp<position_t>(ecs, e01));
+            position_t* cp2 = g_get_cp<position_t>(ecs, e01);
+            CHECK_NOT_NULL(cp2);
+            CHECK_EQUAL(cpa2, cp2);
 
             g_destroy_entity(ecs, e01);
 

@@ -10,14 +10,22 @@ namespace ncore
 {
     namespace necs2
     {
+        enum
+        {
+            ECS_MAX_GROUPS               = 64,
+            ECS_MAX_COMPONENTS_PER_GROUP = 32,
+        };
+
+        static_assert(ECS_MAX_GROUPS <= 64, "ECS_MAX_GROUPS must be less than or equal to 64");
+
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // type definitions and utility functions
-        static inline entity_t s_entity_make(entity_genid_t genid, entity_index_t index) { return ((u32)genid << ECS_ENTITY_GEN_SHIFT) | (index & ECS_ENTITY_INDEX_MASK); }
+        static inline entity_t s_entity_make(entity_generation_t genid, entity_index_t index) { return ((u32)genid << ECS_ENTITY_GEN_SHIFT) | (index & ECS_ENTITY_INDEX_MASK); }
 
-        // Component Type, cp_type_t and tg_type_t
-        struct cp_type_t
+        // Component Type, component_type_t and tag_type_t
+        struct component_type_t
         {
             const char* cp_name;           // Name of the component
             s32         cp_sizeof;         // Size of the component in bits
@@ -25,32 +33,32 @@ namespace ncore
             s8          cp_group_index;    // The group index
             s8          cp_group_cp_index; // The component index in the group
         };
-        typedef cp_type_t tg_type_t;
+        typedef component_type_t tag_type_t;
 
-        // Component Group managing a maximum of 32 components
-        struct cg_type_t
+        // Component Group managing a maximum of ECS_MAX_COMPONENTS_PER_GROUP components
+        struct cg_group_t
         {
-            const char* m_name;             // The name of the component group
-            binmap_t    m_en_binmap;        // For iteration, which entities are used
-            u32         m_max_entities;     // Maximum number of entities in this group
-            u32         m_cp_used;          // Each bit represents if for this group the component is free or used
-            byte*       m_a_en_cp_data[32]; // The component data array per component type
-            alloc_t*    m_allocator;        // The allocator
+            const char* m_name;                                       // The name of the component group
+            binmap_t    m_en_binmap;                                  // For iteration, which entities are used
+            u32         m_max_entities;                               // Maximum number of entities in this group
+            u32         m_cp_used;                                    // Each bit represents if for this group the component is free or used
+            byte*       m_a_en_cp_data[ECS_MAX_COMPONENTS_PER_GROUP]; // The component data array per component type
+            alloc_t*    m_allocator;                                  // The allocator
             s8          m_group_index;
         };
 
-        static void s_cp_group_init(cg_type_t* group)
+        static void s_cp_group_init(cg_group_t* group)
         {
             group->m_en_binmap.reset();
             group->m_max_entities = 0;
             group->m_cp_used      = 0;
-            for (u32 i = 0; i < 32; ++i)
+            for (u32 i = 0; i < ECS_MAX_COMPONENTS_PER_GROUP; ++i)
                 group->m_a_en_cp_data[i] = nullptr;
             group->m_allocator   = nullptr;
             group->m_group_index = -1;
         }
 
-        static void s_cp_group_construct(cg_type_t* group, s8 index, u32 max_entities, alloc_t* allocator)
+        static void s_cp_group_construct(cg_group_t* group, s8 index, u32 max_entities, alloc_t* allocator)
         {
             if (max_entities > 0)
             {
@@ -61,7 +69,7 @@ namespace ncore
                 group->m_en_binmap.init_all_free(cfg, allocator);
             }
         }
-        static void s_cp_group_destruct(cg_type_t* group)
+        static void s_cp_group_destruct(cg_group_t* group)
         {
             alloc_t* allocator = group->m_allocator;
             u32      cp_used   = group->m_cp_used;
@@ -76,27 +84,26 @@ namespace ncore
             s_cp_group_init(group);
         }
 
-        static s8 s_cp_group_register_cp(cg_type_t* group, cp_type_t* cp_type)
+        static s8 s_cp_group_register_cp(cg_group_t* group, component_type_t* cp_type)
         {
             s8 const cp_id = math::findFirstBit(~group->m_cp_used);
-            if (cp_id >= 0 && cp_id < 32)
+            if (cp_id >= 0 && cp_id < ECS_MAX_COMPONENTS_PER_GROUP)
             {
                 group->m_cp_used |= (1 << cp_id);
 
                 // Only create entity-component data array for components and *not* for tags
                 if (cp_type->cp_sizeof > 0)
                 {
-                    group->m_a_en_cp_data[cp_id] = (byte*)group->m_allocator->allocate(group->m_max_entities * cp_type->cp_sizeof);
+                    group->m_a_en_cp_data[cp_id] = g_allocate_array<byte>(group->m_allocator, group->m_max_entities * cp_type->cp_sizeof);
                 }
-
                 return (s8)cp_id;
             }
             return -1;
         }
 
-        static void s_cp_group_unregister_cp(cg_type_t* group, s8 cp_index)
+        static void s_cp_group_unregister_cp(cg_group_t* group, s8 cp_index)
         {
-            ASSERT(cp_index >= 0 && cp_index < 32);
+            ASSERT(cp_index >= 0 && cp_index < ECS_MAX_COMPONENTS_PER_GROUP);
             group->m_cp_used &= ~(1 << cp_index);
             if (group->m_a_en_cp_data[cp_index] != nullptr)
             {
@@ -106,45 +113,58 @@ namespace ncore
         }
 
         // Component Type Manager
-        struct cp_type_mgr_t
+        struct component_type_mgr_t
         {
-            binmap_t   m_cp_binmap; // 2 * max_components bytes; To identify which component stores are still free (to give out new component type)
-            cp_type_t* m_a_cp_type; // 8 bytes; The type information attached to each store
+            binmap_t          m_cp_binmap; //
+            component_type_t* m_a_cp_type; // 8 bytes; The type information attached to each store
         };
 
         // Component Group Manager
-        // Note that we can have a maximum of 64 component groups, each component group can have a maximum of 32 components.
-        // So in theory we can handle a total of 64 * 32 = 2048 components.
-        struct cp_group_mgr_t
+        // Note that we can have a maximum of ECS_MAX_GROUPS component groups, each component group
+        // can have a maximum of ECS_MAX_COMPONENTS_PER_GROUP components.
+        // So in theory we can handle a total of ECS_MAX_GROUPS * ECS_MAX_COMPONENTS_PER_GROUP.
+        struct component_group_mgr_t
         {
-            u32        m_cp_groups_max;  // Maximum number of component groups
-            u64        m_cp_groups_used; // Bits indicate which groups are used/free
-            alloc_t*   m_allocator;
-            cg_type_t* m_cp_groups; // The array of component groups
+            u32         m_cp_groups_max;  // Maximum number of component groups
+            u64         m_cp_groups_used; // Bits indicate which groups are used/free
+            alloc_t*    m_allocator;      // The allocator
+            cg_group_t* m_cp_groups;      // The array of component groups
         };
 
         // Entity data structure (64 bytes)
-        // Note that this setup limits an entity to 7 component groups (so a theoretical maximum of 224 components per entity)
+        // Note: The setup here limits an entity to 7 component groups (so a theoretical maximum of 224 components per entity)
+        // Note: You can easily bumps this up, of course with here and there some code changes
         struct entity_instance_t
         {
-            u64 m_cp_groups;            // Global maximum of 64 component groups, each bit represents a group index (bit 0 is group 0, bit 3 is group 3 etc..)
+            u64 m_cp_groups;            // Global maximum of ECS_MAX_GROUPS component groups, each bit represents a group index (bit 0 is group 0, bit 3 is group 3 etc..)
             u32 m_cp_group_cp_used[7];  // Each bit index represents the 'component index' in that component group
-            u32 m_cp_group_en_index[7]; // The index of the entity in the component group
+            u32 m_cp_group_en_index[7]; // The index of the entity in the component group (max 7 component groups)
         };
+
+        static inline void s_init(entity_instance_t* entity)
+        {
+            entity->m_cp_groups = 0;
+            for (u32 i = 0; i < 7; ++i)
+            {
+                entity->m_cp_group_cp_used[i]  = 0;
+                entity->m_cp_group_en_index[i] = 0;
+            }
+        }
 
         struct entity_mgr_t
         {
-            duomap_t           m_entity_state; // Which entities are alive/dead
-            entity_genid_t*    m_a_entity_ver; // The generation Id of each entity
-            entity_instance_t* m_a_entity;     // The array of entities entries
+            duomap_t             m_entity_state; // Which entities are alive/dead
+            entity_generation_t* m_a_entity_ver; // The generation Id of each entity
+            entity_instance_t*   m_a_entity;     // The array of entities entries
         };
 
         struct ecs_t
         {
-            alloc_t*       m_allocator;    // The allocator
-            cp_type_mgr_t  m_cp_type_mgr;  // The component type manager
-            cp_group_mgr_t m_cp_group_mgr; // The component group manager
-            entity_mgr_t   m_entity_mgr;   // The entity manager
+            DCORE_CLASS_PLACEMENT_NEW_DELETE
+            alloc_t*              m_allocator;    // The allocator
+            component_type_mgr_t  m_cp_type_mgr;  // The component type manager
+            component_group_mgr_t m_cp_group_mgr; // The component group manager
+            entity_mgr_t          m_entity_mgr;   // The entity manager
         };
 
         // --------------------------------------------------------------------------------------------------------
@@ -152,30 +172,30 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // component type, component type manager
 
-        static void s_init(cp_type_mgr_t* cps, u32 max_components, alloc_t* allocator)
+        static void s_init(component_type_mgr_t* cps, u32 max_components, alloc_t* allocator)
         {
             cps->m_cp_binmap.reset();
             binmap_t::config_t cfg = binmap_t::config_t::compute(max_components);
             cps->m_cp_binmap.init_all_free(cfg, allocator);
-            cps->m_a_cp_type = (cp_type_t*)allocator->allocate(sizeof(cp_type_t) * max_components);
+            cps->m_a_cp_type = g_allocate_array_and_memset<component_type_t>(allocator, max_components);
         }
 
-        static void s_exit(cp_type_mgr_t* cps, alloc_t* allocator)
+        static void s_exit(component_type_mgr_t* cps, alloc_t* allocator)
         {
             allocator->deallocate(cps->m_a_cp_type);
             cps->m_cp_binmap.release(allocator);
             cps->m_a_cp_type = nullptr;
         }
 
-        static bool s_register_cp_type(cp_type_mgr_t* cps, cp_group_mgr_t* cp_group_mgr, u32 cg_index, u32 cp_index, const char* cp_name, s32 cp_sizeof, s32 cp_alignof)
+        static bool s_register_cp_type(component_type_mgr_t* cps, component_group_mgr_t* cp_group_mgr, u32 cg_index, u32 cp_index, const char* cp_name, s32 cp_sizeof, s32 cp_alignof)
         {
             if (cp_index >= 0)
             {
-                cp_type_t* cp_type      = (cp_type_t*)&cps->m_a_cp_type[cp_index];
-                cp_type->cp_name        = cp_name;
-                cp_type->cp_sizeof      = cp_sizeof;
-                cp_type->cp_alignof     = cp_alignof;
-                cp_type->cp_group_index = cg_index;
+                component_type_t* cp_type = (component_type_t*)&cps->m_a_cp_type[cp_index];
+                cp_type->cp_name          = cp_name;
+                cp_type->cp_sizeof        = cp_sizeof;
+                cp_type->cp_alignof       = cp_alignof;
+                cp_type->cp_group_index   = cg_index;
                 cps->m_cp_binmap.set_used(cp_index);
 
                 // Register a component in the component group
@@ -185,11 +205,11 @@ namespace ncore
             return false;
         }
 
-        static void s_unregister_cp_type(cp_type_mgr_t* cps, cp_group_mgr_t* cp_group_mgr, u32 cg_index, u32 cp_index)
+        static void s_unregister_cp_type(component_type_mgr_t* cps, component_group_mgr_t* cp_group_mgr, u32 cg_index, u32 cp_index)
         {
             if (cps->m_cp_binmap.is_used(cp_index))
             {
-                cg_type_t* group = &cp_group_mgr->m_cp_groups[cg_index];
+                cg_group_t* group = &cp_group_mgr->m_cp_groups[cg_index];
                 s_cp_group_unregister_cp(group, cg_index);
                 cps->m_cp_binmap.set_free(cp_index);
             }
@@ -200,26 +220,26 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // tag type, tag type manager (tags are basically components, but they have no backing component data)
 
-        static bool s_register_tag_type(cp_type_mgr_t* ts, cp_group_mgr_t* cp_group_mgr, u32 cg_index, u32 tg_index, const char* tg_name) { return (tg_type_t*)s_register_cp_type(ts, cp_group_mgr, cg_index, tg_index, tg_name, 0, 0); }
-        static void s_unregister_tg_type(cp_type_mgr_t* cps, cp_group_mgr_t* cp_group_mgr, u32 cg_index, u32 tg_index) { s_unregister_cp_type(cps, cp_group_mgr, cg_index, tg_index); }
+        static bool s_register_tag_type(component_type_mgr_t* ts, component_group_mgr_t* cp_group_mgr, u32 cg_index, u32 tg_index, const char* tg_name) { return (tag_type_t*)s_register_cp_type(ts, cp_group_mgr, cg_index, tg_index, tg_name, 0, 0); }
+        static void s_unregister_tg_type(component_type_mgr_t* cps, component_group_mgr_t* cp_group_mgr, u32 cg_index, u32 tg_index) { s_unregister_cp_type(cps, cp_group_mgr, cg_index, tg_index); }
 
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // component group manager, create and destroy
 
-        static void s_init(cp_group_mgr_t* cp_group_mgr, u32 max_groups, alloc_t* allocator)
+        static void s_init(component_group_mgr_t* cp_group_mgr, u32 max_groups, alloc_t* allocator)
         {
-            ASSERT(max_groups > 0 && max_groups <= 64);
+            ASSERT(max_groups > 0 && max_groups <= ECS_MAX_GROUPS);
             cp_group_mgr->m_allocator      = allocator;
             cp_group_mgr->m_cp_groups_max  = max_groups;
-            cp_group_mgr->m_cp_groups      = (cg_type_t*)allocator->allocate(sizeof(cg_type_t) * max_groups);
+            cp_group_mgr->m_cp_groups      = g_allocate_array<cg_group_t>(allocator, max_groups);
             cp_group_mgr->m_cp_groups_used = 0;
             for (u32 i = 0; i < max_groups; ++i)
                 s_cp_group_init(&cp_group_mgr->m_cp_groups[i]);
         }
 
-        static void s_exit(cp_group_mgr_t* cp_group_mgr, alloc_t* allocator)
+        static void s_exit(component_group_mgr_t* cp_group_mgr, alloc_t* allocator)
         {
             u64 groups_used = cp_group_mgr->m_cp_groups_used;
             while (groups_used != 0)
@@ -236,9 +256,9 @@ namespace ncore
             cp_group_mgr->m_cp_groups_used = 0;
         }
 
-        static bool s_register_group(cp_group_mgr_t* cp_group_mgr, u32 max_entities, u32 cg_index, const char* cg_name)
+        static bool s_register_group(component_group_mgr_t* cp_group_mgr, u32 max_entities, u32 cg_index, const char* cg_name)
         {
-            if (cg_index >= 64)
+            if (cg_index >= ECS_MAX_GROUPS)
                 return false;
 
             // Find a '0' bit in the group used array
@@ -246,18 +266,18 @@ namespace ncore
                 return false;
 
             cp_group_mgr->m_cp_groups_used |= ((u64)1 << cg_index);
-            cg_type_t* group = &cp_group_mgr->m_cp_groups[cg_index];
+            cg_group_t* group = &cp_group_mgr->m_cp_groups[cg_index];
             s_cp_group_construct(group, cg_index, max_entities, cp_group_mgr->m_allocator);
             group->m_name = cg_name;
 
             return true;
         }
 
-        static void s_unregister_group(cp_group_mgr_t* cp_group_mgr, u32 cg_index)
+        static void s_unregister_group(component_group_mgr_t* cp_group_mgr, u32 cg_index)
         {
-            if (cg_index >= 0 && cg_index < 64)
+            if (cg_index >= 0 && cg_index < ECS_MAX_GROUPS)
             {
-                cg_type_t* group = &cp_group_mgr->m_cp_groups[cg_index];
+                cg_group_t* group = &cp_group_mgr->m_cp_groups[cg_index];
                 if (cp_group_mgr->m_cp_groups_used & ((u64)1 << cg_index))
                 {
                     cp_group_mgr->m_cp_groups_used &= ~((u64)1 << cg_index);
@@ -277,9 +297,8 @@ namespace ncore
 
             binmap_t::config_t cfg = binmap_t::config_t::compute(max_entities);
             entity_mgr->m_entity_state.init_all_free(cfg, allocator);
-
-            entity_mgr->m_a_entity_ver = (entity_genid_t*)allocator->allocate(sizeof(entity_genid_t) * max_entities);
-            entity_mgr->m_a_entity     = (entity_instance_t*)allocator->allocate(sizeof(entity_instance_t) * max_entities);
+            entity_mgr->m_a_entity_ver = g_allocate_array<entity_generation_t>(allocator, max_entities);
+            entity_mgr->m_a_entity     = g_allocate_array<entity_instance_t>(allocator, max_entities);
         }
 
         static bool s_create_entity(entity_mgr_t* entity_mgr, entity_index_t& index)
@@ -311,10 +330,10 @@ namespace ncore
 
         ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities)
         {
-            ecs_t* ecs       = (ecs_t*)allocator->allocate(sizeof(ecs_t));
+            ecs_t* ecs       = allocator->construct<ecs_t>();
             ecs->m_allocator = allocator;
-            s_init(&ecs->m_cp_type_mgr, 64, allocator);
-            s_init(&ecs->m_cp_group_mgr, 64, allocator);
+            s_init(&ecs->m_cp_type_mgr, ECS_MAX_GROUPS, allocator);
+            s_init(&ecs->m_cp_group_mgr, ECS_MAX_GROUPS, allocator);
             s_init(&ecs->m_entity_mgr, max_entities, allocator);
             return ecs;
         }
@@ -344,12 +363,12 @@ namespace ncore
 
         static bool s_entity_has_component(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            cp_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
-            s8 const         cp_group_index    = cp_type->cp_group_index;
-            s8 const         cp_group_cp_index = cp_type->cp_group_cp_index;
+            component_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
+            s8 const                cp_group_index    = cp_type->cp_group_index;
+            s8 const                cp_group_cp_index = cp_type->cp_group_cp_index;
 
-            ASSERT(cp_group_index >= 0 && cp_group_index < 64);
-            ASSERT(cp_group_cp_index >= 0 && cp_group_cp_index < 32);
+            ASSERT(cp_group_index >= 0 && cp_group_index < ECS_MAX_GROUPS);
+            ASSERT(cp_group_cp_index >= 0 && cp_group_cp_index < ECS_MAX_COMPONENTS_PER_GROUP);
 
             entity_instance_t const& entity_instance = ecs->m_entity_mgr.m_a_entity[s_entity_index(entity)];
             u32 const                cp_group_bit    = (1 << cp_group_index);
@@ -363,11 +382,11 @@ namespace ncore
             return false;
         }
 
-        static void* s_entity_get_component(ecs_t* ecs, entity_t entity, u32 cp_index)
+        static byte* s_entity_get_component(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            cp_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
-            s8 const         cp_group_index    = cp_type->cp_group_index;
-            s8 const         cp_group_cp_index = cp_type->cp_group_cp_index;
+            component_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
+            s8 const                cp_group_index    = cp_type->cp_group_index;
+            s8 const                cp_group_cp_index = cp_type->cp_group_cp_index;
 
             u32 const          entity_index    = s_entity_index(entity);
             entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
@@ -379,28 +398,28 @@ namespace ncore
                 u32 const cp_used = entity_instance.m_cp_group_cp_used[gi];
                 if (cp_used & (1 << cp_group_cp_index))
                 {
-                    u32 const  cp_group_en_index = entity_instance.m_cp_group_en_index[gi];
-                    cg_type_t* group             = &ecs->m_cp_group_mgr.m_cp_groups[cp_group_index];
+                    u32 const   cp_group_en_index = entity_instance.m_cp_group_en_index[gi];
+                    cg_group_t* group             = &ecs->m_cp_group_mgr.m_cp_groups[cp_group_index];
                     return group->m_a_en_cp_data[cp_group_en_index];
                 }
             }
             return nullptr;
         }
 
-        static void s_entity_add_component(ecs_t* ecs, entity_t e, u32 cp_index)
+        static byte* s_entity_add_component(ecs_t* ecs, entity_t e, u32 cp_index)
         {
-            cp_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
-            s8 const         cp_group_index    = cp_type->cp_group_index;
-            s8 const         cp_group_cp_index = cp_type->cp_group_cp_index;
-            u32 const        c_group_bit       = (1 << cp_group_index);
+            component_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
+            s8 const                cp_group_index    = cp_type->cp_group_index;
+            s8 const                cp_group_cp_index = cp_type->cp_group_cp_index;
 
             u32 const          entity_index    = s_entity_index(e);
             entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
+            u32 const          c_group_bit     = (1 << cp_group_index);
             if ((entity_instance.m_cp_groups & c_group_bit) == 0)
             {
                 // An entity_instance can have a maximum of 7 component groups
                 if (math::countBits(entity_instance.m_cp_groups) == 7)
-                    return;
+                    return nullptr;
 
                 entity_instance.m_cp_groups |= c_group_bit;
             }
@@ -410,14 +429,18 @@ namespace ncore
             s8 const  gi      = math::countBits(gb);
             u32&      cp_used = entity_instance.m_cp_group_cp_used[gi];
             cp_used |= (1 << cp_group_cp_index);
+
+            u32 const   cp_group_en_index = entity_instance.m_cp_group_en_index[gi];
+            cg_group_t* group             = &ecs->m_cp_group_mgr.m_cp_groups[cp_group_index];
+            return group->m_a_en_cp_data[cp_group_en_index];
         }
 
         // Remove/detach component from the entity
         static void s_entity_rem_component(ecs_t* ecs, entity_t e, u32 cp_index)
         {
-            cp_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
-            s8 const         cp_group_index    = cp_type->cp_group_index;
-            s8 const         cp_group_cp_index = cp_type->cp_group_cp_index;
+            component_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
+            s8 const                cp_group_index    = cp_type->cp_group_index;
+            s8 const                cp_group_cp_index = cp_type->cp_group_cp_index;
 
             u32 const          entity_index    = s_entity_index(e);
             entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
@@ -446,14 +469,8 @@ namespace ncore
             if (s_create_entity(&ecs->m_entity_mgr, entity_index))
             {
                 entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
-                entity_instance.m_cp_groups        = 0;
-                for (s8 i = 0; i < 7; ++i)
-                {
-                    entity_instance.m_cp_group_cp_used[i]  = 0;
-                    entity_instance.m_cp_group_en_index[i] = 0;
-                }
-
-                entity_genid_t& gen_id = ecs->m_entity_mgr.m_a_entity_ver[entity_index];
+                s_init(&entity_instance);
+                entity_generation_t& gen_id = ecs->m_entity_mgr.m_a_entity_ver[entity_index];
                 gen_id += 1;
                 return s_entity_make(gen_id, entity_index);
             }
@@ -462,9 +479,10 @@ namespace ncore
 
         void g_destroy_entity(ecs_t* ecs, entity_t e)
         {
-            entity_genid_t const gen_id = s_entity_genid(e);
-            entity_genid_t const cur_id = ecs->m_entity_mgr.m_a_entity_ver[s_entity_index(e)];
-            // NOTE Do we verify the generation id and if it doesn't match we do not delete the entity?
+            entity_generation_t const gen_id = s_entity_generation(e);
+            entity_generation_t const cur_id = ecs->m_entity_mgr.m_a_entity_ver[s_entity_index(e)];
+
+            // NOTE: Do we verify the generation id and if it doesn't match we do not delete the entity?
             if (gen_id != cur_id)
                 return;
 
@@ -473,7 +491,7 @@ namespace ncore
         }
 
         bool  g_has_cp(ecs_t* ecs, entity_t entity, u32 cp_index) { return s_entity_has_component(ecs, entity, cp_index); }
-        void  g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index) { s_entity_add_component(ecs, entity, cp_index); }
+        void* g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index) { return s_entity_add_component(ecs, entity, cp_index); }
         void  g_rem_cp(ecs_t* ecs, entity_t entity, u32 cp_index) { s_entity_rem_component(ecs, entity, cp_index); }
         void* g_get_cp(ecs_t* ecs, entity_t entity, u32 cp_index) { return s_entity_get_component(ecs, entity, cp_index); }
 
@@ -499,9 +517,9 @@ namespace ncore
         // Mark the things you want to iterate on
         void en_iterator_t::set_cp_type(u32 cp_index)
         {
-            const cp_type_t* cp_type           = &m_ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
-            s8 const         cp_group_index    = cp_type->cp_group_index;
-            s8 const         cp_group_cp_index = cp_type->cp_group_cp_index;
+            const component_type_t* cp_type           = &m_ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
+            s8 const                cp_group_index    = cp_type->cp_group_index;
+            s8 const                cp_group_cp_index = cp_type->cp_group_cp_index;
 
             u32 const group_bit    = (1 << cp_group_index);
             s8 const  groups_pivot = math::countBits(m_group_mask & (group_bit - 1));
