@@ -1,9 +1,9 @@
 #include "ccore/c_target.h"
+#include "ccore/c_allocator.h"
 #include "cbase/c_buffer.h"
 #include "cecs/c_ecs2.h"
 
 #include "cunittest/cunittest.h"
-#include "cecs/test_allocator.h"
 
 using namespace ncore;
 using namespace ncore::necs2;

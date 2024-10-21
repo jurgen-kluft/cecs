@@ -512,15 +512,12 @@ namespace ncore
 
         static inline s32 s_first_entity(entity_mgr_t* mgr)
         {
-            s32 const index = mgr->m_entity_state.find_used();
-            return (s32)index;
+            return mgr->m_entity_state.find_used();
         }
 
         static inline s32 s_next_entity(entity_mgr_t* mgr, u32 index)
         {
-            index += 1;
-            s32 const next_index = mgr->m_entity_state.upper_used(index);
-            return next_index;
+            return mgr->m_entity_state.next_used_up(index + 1);
         }
 
         static s32 s_search_matching_entity(en_iterator_t& iter)
