@@ -25,6 +25,7 @@ namespace ncore
             s8          cp_group_index;    // The group index
             s8          cp_group_cp_index; // The component index in the group
         };
+        typedef cp_type_t tg_type_t;
 
         // Component Group managing a maximum of 32 components
         struct cg_type_t
@@ -53,9 +54,9 @@ namespace ncore
         {
             if (max_entities > 0)
             {
-                group->m_allocator    = allocator;
-                group->m_group_index  = index;
-                group->m_max_entities = max_entities;
+                group->m_allocator     = allocator;
+                group->m_group_index   = index;
+                group->m_max_entities  = max_entities;
                 binmap_t::config_t cfg = binmap_t::config_t::compute(max_entities);
                 group->m_en_binmap.init_all_free(cfg, allocator);
             }
@@ -166,34 +167,31 @@ namespace ncore
             cps->m_a_cp_type = nullptr;
         }
 
-        static cp_type_t* s_register_cp_type(cp_type_mgr_t* cps, cg_type_t* cp_group, const char* cp_name, s32 cp_sizeof, s32 cp_alignof)
+        static bool s_register_cp_type(cp_type_mgr_t* cps, cp_group_mgr_t* cp_group_mgr, u32 cg_index, u32 cp_index, const char* cp_name, s32 cp_sizeof, s32 cp_alignof)
         {
-            s32 const cp_id = cps->m_cp_binmap.find();
-            if (cp_id >= 0)
+            if (cp_index >= 0)
             {
-                cp_type_t* cp_type      = (cp_type_t*)&cps->m_a_cp_type[cp_id];
+                cp_type_t* cp_type      = (cp_type_t*)&cps->m_a_cp_type[cp_index];
                 cp_type->cp_name        = cp_name;
                 cp_type->cp_sizeof      = cp_sizeof;
                 cp_type->cp_alignof     = cp_alignof;
-                cp_type->cp_group_index = cp_group->m_group_index;
-                cps->m_cp_binmap.set_used(cp_id);
+                cp_type->cp_group_index = cg_index;
+                cps->m_cp_binmap.set_used(cp_index);
 
                 // Register a component in the component group
-                cp_type->cp_group_cp_index = s_cp_group_register_cp(cp_group, cp_type);
-
-                return cp_type;
+                cp_type->cp_group_cp_index = s_cp_group_register_cp(&cp_group_mgr->m_cp_groups[cg_index], cp_type);
+                return true;
             }
-            return nullptr;
+            return false;
         }
 
-        static void s_unregister_cp_type(cp_type_mgr_t* cps, cp_type_t* cp_type, cp_group_mgr_t* cp_group_mgr)
+        static void s_unregister_cp_type(cp_type_mgr_t* cps, cp_group_mgr_t* cp_group_mgr, u32 cg_index, u32 cp_index)
         {
-            u32 const cp_id = (u32)(cp_type - cps->m_a_cp_type);
-            if (cps->m_cp_binmap.is_used(cp_id))
+            if (cps->m_cp_binmap.is_used(cp_index))
             {
-                cg_type_t* group = &cp_group_mgr->m_cp_groups[cp_type->cp_group_index];
-                s_cp_group_unregister_cp(group, cp_type->cp_group_cp_index);
-                cps->m_cp_binmap.set_free(cp_id);
+                cg_type_t* group = &cp_group_mgr->m_cp_groups[cg_index];
+                s_cp_group_unregister_cp(group, cg_index);
+                cps->m_cp_binmap.set_free(cp_index);
             }
         }
 
@@ -202,8 +200,8 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // tag type, tag type manager (tags are basically components, but they have no backing component data)
 
-        static tg_type_t* s_register_tag_type(cp_type_mgr_t* ts, const char* cp_name, cg_type_t* cp_group) { return (tg_type_t*)s_register_cp_type(ts, cp_group, cp_name, 0, 0); }
-        static void       s_unregister_tg_type(cp_type_mgr_t* cps, cp_type_t* cp_type, cp_group_mgr_t* cp_group_mgr) { s_unregister_cp_type(cps, cp_type, cp_group_mgr); }
+        static bool s_register_tag_type(cp_type_mgr_t* ts, cp_group_mgr_t* cp_group_mgr, u32 cg_index, u32 tg_index, const char* tg_name) { return (tg_type_t*)s_register_cp_type(ts, cp_group_mgr, cg_index, tg_index, tg_name, 0, 0); }
+        static void s_unregister_tg_type(cp_type_mgr_t* cps, cp_group_mgr_t* cp_group_mgr, u32 cg_index, u32 tg_index) { s_unregister_cp_type(cps, cp_group_mgr, cg_index, tg_index); }
 
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
@@ -238,25 +236,34 @@ namespace ncore
             cp_group_mgr->m_cp_groups_used = 0;
         }
 
-        static cg_type_t* s_register_group(cp_group_mgr_t* cp_group_mgr, u32 max_entities, const char* cg_name)
+        static bool s_register_group(cp_group_mgr_t* cp_group_mgr, u32 max_entities, u32 cg_index, const char* cg_name)
         {
+            if (cg_index >= 64)
+                return false;
+
             // Find a '0' bit in the group used array
-            s8 const id = math::findFirstBit(~cp_group_mgr->m_cp_groups_used);
-            if (id >= 0 && id < 64)
-            {
-                cp_group_mgr->m_cp_groups_used |= ((u64)1 << id);
-                cg_type_t* group = &cp_group_mgr->m_cp_groups[id];
-                s_cp_group_construct(group, id, max_entities, cp_group_mgr->m_allocator);
-                group->m_name = cg_name;
-                return group;
-            }
-            return nullptr;
+            if (cp_group_mgr->m_cp_groups_used & ((u64)1 << cg_index))
+                return false;
+
+            cp_group_mgr->m_cp_groups_used |= ((u64)1 << cg_index);
+            cg_type_t* group = &cp_group_mgr->m_cp_groups[cg_index];
+            s_cp_group_construct(group, cg_index, max_entities, cp_group_mgr->m_allocator);
+            group->m_name = cg_name;
+
+            return true;
         }
 
-        static void s_unregister_group(cp_group_mgr_t* cp_group_mgr, cg_type_t* cp_group)
+        static void s_unregister_group(cp_group_mgr_t* cp_group_mgr, u32 cg_index)
         {
-            cp_group_mgr->m_cp_groups_used &= ~((u64)1 << cp_group->m_group_index);
-            s_cp_group_destruct(cp_group);
+            if (cg_index >= 0 && cg_index < 64)
+            {
+                cg_type_t* group = &cp_group_mgr->m_cp_groups[cg_index];
+                if (cp_group_mgr->m_cp_groups_used & ((u64)1 << cg_index))
+                {
+                    cp_group_mgr->m_cp_groups_used &= ~((u64)1 << cg_index);
+                    s_cp_group_destruct(group);
+                }
+            }
         }
 
         // --------------------------------------------------------------------------------------------------------
@@ -286,10 +293,7 @@ namespace ncore
             return false;
         }
 
-        static void s_destroy_entity(entity_mgr_t* entity_mgr, entity_index_t index)
-        {
-            entity_mgr->m_entity_state.set_free(index);
-        }
+        static void s_destroy_entity(entity_mgr_t* entity_mgr, entity_index_t index) { entity_mgr->m_entity_state.set_free(index); }
 
         static void s_exit(entity_mgr_t* entity_mgr, alloc_t* allocator)
         {
@@ -326,22 +330,23 @@ namespace ncore
             allocator->deallocate(ecs);
         }
 
-        cg_type_t* g_register_cp_group(ecs_t* ecs, u32 max_entities, const char* cg_name) { return s_register_group(&ecs->m_cp_group_mgr, max_entities, cg_name); }
-        void       g_unregister_cp_group(ecs_t* ecs, cg_type_t* cg_type) { return s_unregister_group(&ecs->m_cp_group_mgr, cg_type); }
+        bool g_register_cp_group(ecs_t* ecs, u32 max_entities, u32 cg_index, const char* cg_name) { return s_register_group(&ecs->m_cp_group_mgr, max_entities, cg_index, cg_name); }
+        void g_unregister_cp_group(ecs_t* ecs, u32 cg_index) { return s_unregister_group(&ecs->m_cp_group_mgr, cg_index); }
 
-        cp_type_t* g_register_cp_type(ecs_t* r, cg_type_t* cp_group, const char* cp_name, s32 cp_sizeof, s32 cp_alignof) { return s_register_cp_type(&r->m_cp_type_mgr, cp_group, cp_name, cp_sizeof, cp_alignof); }
-        void       g_unregister_cp_type(ecs_t* r, cp_type_t* cp_type) { return s_unregister_cp_type(&r->m_cp_type_mgr, cp_type, &r->m_cp_group_mgr); }
+        bool g_register_cp_type(ecs_t* r, u32 cg_index, u32 cp_index, const char* cp_name, s32 cp_sizeof, s32 cp_alignof) { return s_register_cp_type(&r->m_cp_type_mgr, &r->m_cp_group_mgr, cg_index, cp_index, cp_name, cp_sizeof, cp_alignof); }
+        void g_unregister_cp_type(ecs_t* r, u32 cg_index, u32 cp_index) { return s_unregister_cp_type(&r->m_cp_type_mgr, &r->m_cp_group_mgr, cg_index, cp_index); }
 
-        tg_type_t* g_register_tg_type(ecs_t* r, cg_type_t* cp_group, const char* cp_name) { return s_register_tag_type(&r->m_cp_type_mgr, cp_name, cp_group); }
-        void       g_unregister_tg_type(ecs_t* r, tg_type_t* tg_type) { return s_unregister_tg_type(&r->m_cp_type_mgr, (cp_type_t*)tg_type, &r->m_cp_group_mgr); }
+        bool g_register_tg_type(ecs_t* r, u32 cg_index, u32 tg_index, const char* tg_name) { return s_register_tag_type(&r->m_cp_type_mgr, &r->m_cp_group_mgr, cg_index, tg_index, tg_name); }
+        void g_unregister_tg_type(ecs_t* r, u32 cg_index, u32 tg_index) { return s_unregister_tg_type(&r->m_cp_type_mgr, &r->m_cp_group_mgr, cg_index, tg_index); }
 
         // --------------------------------------------------------------------------------------------------------
         // entity functionality
 
-        static bool s_entity_has_component(ecs_t* ecs, entity_t entity, cp_type_t* cp_type)
+        static bool s_entity_has_component(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            s8 const cp_group_index    = cp_type->cp_group_index;
-            s8 const cp_group_cp_index = cp_type->cp_group_cp_index;
+            cp_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
+            s8 const         cp_group_index    = cp_type->cp_group_index;
+            s8 const         cp_group_cp_index = cp_type->cp_group_cp_index;
 
             ASSERT(cp_group_index >= 0 && cp_group_index < 64);
             ASSERT(cp_group_cp_index >= 0 && cp_group_cp_index < 32);
@@ -358,10 +363,11 @@ namespace ncore
             return false;
         }
 
-        static void* s_entity_get_component(ecs_t* ecs, entity_t entity, cp_type_t* cp_type)
+        static void* s_entity_get_component(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            s8 const cp_group_index    = cp_type->cp_group_index;
-            s8 const cp_group_cp_index = cp_type->cp_group_cp_index;
+            cp_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
+            s8 const         cp_group_index    = cp_type->cp_group_index;
+            s8 const         cp_group_cp_index = cp_type->cp_group_cp_index;
 
             u32 const          entity_index    = s_entity_index(entity);
             entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
@@ -381,11 +387,12 @@ namespace ncore
             return nullptr;
         }
 
-        static void s_entity_add_component(ecs_t* ecs, entity_t e, cp_type_t* cp_type)
+        static void s_entity_add_component(ecs_t* ecs, entity_t e, u32 cp_index)
         {
-            s8 const  cp_group_index    = cp_type->cp_group_index;
-            s8 const  cp_group_cp_index = cp_type->cp_group_cp_index;
-            u32 const c_group_bit       = (1 << cp_group_index);
+            cp_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
+            s8 const         cp_group_index    = cp_type->cp_group_index;
+            s8 const         cp_group_cp_index = cp_type->cp_group_cp_index;
+            u32 const        c_group_bit       = (1 << cp_group_index);
 
             u32 const          entity_index    = s_entity_index(e);
             entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
@@ -406,10 +413,11 @@ namespace ncore
         }
 
         // Remove/detach component from the entity
-        static void s_entity_rem_component(ecs_t* ecs, entity_t e, cp_type_t* cp_type)
+        static void s_entity_rem_component(ecs_t* ecs, entity_t e, u32 cp_index)
         {
-            s8 const cp_group_index    = cp_type->cp_group_index;
-            s8 const cp_group_cp_index = cp_type->cp_group_cp_index;
+            cp_type_t const* cp_type           = &ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
+            s8 const         cp_group_index    = cp_type->cp_group_index;
+            s8 const         cp_group_cp_index = cp_type->cp_group_cp_index;
 
             u32 const          entity_index    = s_entity_index(e);
             entity_instance_t& entity_instance = ecs->m_entity_mgr.m_a_entity[entity_index];
@@ -428,9 +436,9 @@ namespace ncore
 
         // Tags are just components with no data, and since we use bits to indicate if a component is used or not, we can use the same system for tags.
 
-        static bool s_entity_has_tag(ecs_t* ecs, entity_t e, tg_type_t* tg_type) { return s_entity_has_component(ecs, e, (cp_type_t*)tg_type); }
-        static void s_entity_add_tag(ecs_t* ecs, entity_t e, tg_type_t* tg_type) { s_entity_add_component(ecs, e, (cp_type_t*)tg_type); }
-        static void s_entity_rem_tag(ecs_t* ecs, entity_t e, tg_type_t* tg_type) { s_entity_rem_component(ecs, e, (cp_type_t*)tg_type); }
+        static bool s_entity_has_tag(ecs_t* ecs, entity_t e, u32 tg_index) { return s_entity_has_component(ecs, e, tg_index); }
+        static void s_entity_add_tag(ecs_t* ecs, entity_t e, u32 tg_index) { s_entity_add_component(ecs, e, tg_index); }
+        static void s_entity_rem_tag(ecs_t* ecs, entity_t e, u32 tg_index) { s_entity_rem_component(ecs, e, tg_index); }
 
         entity_t g_create_entity(ecs_t* ecs)
         {
@@ -464,15 +472,15 @@ namespace ncore
             s_destroy_entity(&ecs->m_entity_mgr, entity_index);
         }
 
-        bool  g_has_cp(ecs_t* ecs, entity_t entity, cp_type_t* cp_type) { return s_entity_has_component(ecs, entity, cp_type); }
-        void  g_add_cp(ecs_t* ecs, entity_t entity, cp_type_t* cp_type) { s_entity_add_component(ecs, entity, cp_type); }
-        void  g_rem_cp(ecs_t* ecs, entity_t entity, cp_type_t* cp_type) { s_entity_rem_component(ecs, entity, cp_type); }
-        void* g_get_cp(ecs_t* ecs, entity_t entity, cp_type_t* cp_type) { return s_entity_get_component(ecs, entity, cp_type); }
+        bool  g_has_cp(ecs_t* ecs, entity_t entity, u32 cp_index) { return s_entity_has_component(ecs, entity, cp_index); }
+        void  g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index) { s_entity_add_component(ecs, entity, cp_index); }
+        void  g_rem_cp(ecs_t* ecs, entity_t entity, u32 cp_index) { s_entity_rem_component(ecs, entity, cp_index); }
+        void* g_get_cp(ecs_t* ecs, entity_t entity, u32 cp_index) { return s_entity_get_component(ecs, entity, cp_index); }
 
-        bool g_has_tag(ecs_t* ecs, entity_t entity, tg_type_t* tg_type) { return s_entity_has_tag(ecs, entity, tg_type); }
-        void g_add_tag(ecs_t* ecs, entity_t entity, tg_type_t* tg_type) { s_entity_add_tag(ecs, entity, tg_type); }
-        void g_rem_tag(ecs_t* ecs, entity_t entity, tg_type_t* tg_type) { s_entity_rem_tag(ecs, entity, tg_type); }
-        bool g_get_tag(ecs_t* ecs, entity_t entity, tg_type_t* tg_type) { return s_entity_has_tag(ecs, entity, tg_type); }
+        bool g_has_tag(ecs_t* ecs, entity_t entity, u32 tg_index) { return s_entity_has_tag(ecs, entity, tg_index); }
+        void g_add_tag(ecs_t* ecs, entity_t entity, u32 tg_index) { s_entity_add_tag(ecs, entity, tg_index); }
+        void g_rem_tag(ecs_t* ecs, entity_t entity, u32 tg_index) { s_entity_rem_tag(ecs, entity, tg_index); }
+        bool g_get_tag(ecs_t* ecs, entity_t entity, u32 tg_index) { return s_entity_has_tag(ecs, entity, tg_index); }
 
         //////////////////////////////////////////////////////////////////////////
         // en_iterator_t
@@ -489,10 +497,11 @@ namespace ncore
         }
 
         // Mark the things you want to iterate on
-        void en_iterator_t::set_cp_type(cp_type_t* cp_type)
+        void en_iterator_t::set_cp_type(u32 cp_index)
         {
-            s8 const cp_group_index    = cp_type->cp_group_index;
-            s8 const cp_group_cp_index = cp_type->cp_group_cp_index;
+            const cp_type_t* cp_type           = &m_ecs->m_cp_type_mgr.m_a_cp_type[cp_index];
+            s8 const         cp_group_index    = cp_type->cp_group_index;
+            s8 const         cp_group_cp_index = cp_type->cp_group_cp_index;
 
             u32 const group_bit    = (1 << cp_group_index);
             s8 const  groups_pivot = math::countBits(m_group_mask & (group_bit - 1));
@@ -510,15 +519,9 @@ namespace ncore
             m_group_mask |= group_bit;
         }
 
-        static inline s32 s_first_entity(entity_mgr_t* mgr)
-        {
-            return mgr->m_entity_state.find_used();
-        }
+        static inline s32 s_first_entity(entity_mgr_t* mgr) { return mgr->m_entity_state.find_used(); }
 
-        static inline s32 s_next_entity(entity_mgr_t* mgr, u32 index)
-        {
-            return mgr->m_entity_state.next_used_up(index + 1);
-        }
+        static inline s32 s_next_entity(entity_mgr_t* mgr, u32 index) { return mgr->m_entity_state.next_used_up(index + 1); }
 
         static s32 s_search_matching_entity(en_iterator_t& iter)
         {
