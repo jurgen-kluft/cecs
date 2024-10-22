@@ -116,10 +116,10 @@ namespace ncore
 
         void g_destroy_entity(ecs_t* ecs, entity_t e)
         {
-            entity_generation_t const gen_id = s_entity_generation(e);
-            entity_generation_t const cur_id = ecs->m_per_entity_generation[s_entity_index(e)];
+            entity_generation_t const gen_id = g_entity_generation(e);
+            entity_generation_t const cur_id = ecs->m_per_entity_generation[g_entity_index(e)];
             if (gen_id == cur_id)
-                ecs->m_entity_state.set_free(s_entity_index(e));
+                ecs->m_entity_state.set_free(g_entity_index(e));
         }
 
         bool g_register_component(ecs_t* ecs, u32 max_components, u32 cp_index, s32 cp_sizeof, s32 cp_alignof, const char* cp_name)
@@ -150,7 +150,7 @@ namespace ncore
 
         bool g_has_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            u32 const* component_occupancy = &ecs->m_per_entity_component_occupancy[s_entity_index(entity) * ecs->m_component_words_per_entity];
+            u32 const* component_occupancy = &ecs->m_per_entity_component_occupancy[g_entity_index(entity) * ecs->m_component_words_per_entity];
             return (component_occupancy[cp_index >> 5] & (1 << (cp_index & 31))) != 0;
         }
 
@@ -163,7 +163,7 @@ namespace ncore
             if (container->m_sizeof_component == 0)
                 return nullptr;
 
-            u32 const entity_index = s_entity_index(entity);
+            u32 const entity_index = g_entity_index(entity);
             if (container->m_redirect[entity_index] < 0)
             {
                 s32 local_component_index = container->m_occupancy.find();
@@ -196,7 +196,7 @@ namespace ncore
             if (container->m_sizeof_component == 0)
                 return;
 
-            u32 const entity_index = s_entity_index(entity);
+            u32 const entity_index = g_entity_index(entity);
             if (container->m_redirect[entity_index] >= 0)
             {
                 s32 const local_component_index     = container->m_redirect[entity_index];
@@ -217,7 +217,7 @@ namespace ncore
             if (container->m_sizeof_component == 0)
                 return nullptr;
 
-            u32 const index = s_entity_index(entity);
+            u32 const index = g_entity_index(entity);
             if (container->m_redirect[index] >= 0)
                 return &container->m_component_data[container->m_redirect[index] * container->m_sizeof_component];
             return nullptr;
@@ -228,7 +228,7 @@ namespace ncore
             if (tg_index >= ecs->m_max_components)
                 return false;
 
-            u32 const* tag_occupancy = &ecs->m_per_entity_tags[s_entity_index(entity) * ecs->m_tag_words_per_entity];
+            u32 const* tag_occupancy = &ecs->m_per_entity_tags[g_entity_index(entity) * ecs->m_tag_words_per_entity];
             return (tag_occupancy[tg_index >> 5] & (1 << (tg_index & 31))) != 0;
         }
 
@@ -237,7 +237,7 @@ namespace ncore
             if (tg_index >= ecs->m_max_components)
                 return;
 
-            u32* tag_occupancy = &ecs->m_per_entity_tags[s_entity_index(entity) * ecs->m_tag_words_per_entity];
+            u32* tag_occupancy = &ecs->m_per_entity_tags[g_entity_index(entity) * ecs->m_tag_words_per_entity];
             tag_occupancy[tg_index >> 5] |= (1 << (tg_index & 31));
         }
 
@@ -246,13 +246,20 @@ namespace ncore
             if (tg_index >= ecs->m_max_components)
                 return;
 
-            u32* tag_occupancy = &ecs->m_per_entity_tags[s_entity_index(entity) * ecs->m_tag_words_per_entity];
+            u32* tag_occupancy = &ecs->m_per_entity_tags[g_entity_index(entity) * ecs->m_tag_words_per_entity];
             tag_occupancy[tg_index >> 5] &= ~(1 << (tg_index & 31));
+        }
+
+        en_iterator_t::en_iterator_t(ecs_t* ecs)
+            : m_ecs(ecs)
+            , m_entity_reference(-1)
+            , m_entity_index(-1)
+        {
         }
 
         en_iterator_t::en_iterator_t(ecs_t* ecs, entity_t entity_reference)
             : m_ecs(ecs)
-            , m_entity_reference(entity_reference)
+            , m_entity_reference(entity_reference == ECS_ENTITY_NULL ? -1 : g_entity_index(entity_reference))
             , m_entity_index(-1)
         {
         }
@@ -263,11 +270,15 @@ namespace ncore
 
         s32 en_iterator_t::find(s32 entity_index) const
         {
-            u32 const* ref_component_occupancy = &m_ecs->m_per_entity_component_occupancy[s_entity_index(m_entity_reference) * m_ecs->m_component_words_per_entity];
-            u32 const* ref_tag_occupancy       = &m_ecs->m_per_entity_tags[s_entity_index(m_entity_reference) * m_ecs->m_tag_words_per_entity];
+            if (m_entity_reference < 0)
+            {
+                return entity_index >= 0 ? m_ecs->m_entity_state.next_used_up(entity_index) : -1;
+            }
 
             // See if this entity has all the components and tags that we are looking for by taking the
             // intersection of the component and tag occupancy using the reference entity
+            u32 const* ref_component_occupancy = &m_ecs->m_per_entity_component_occupancy[g_entity_index(m_entity_reference) * m_ecs->m_component_words_per_entity];
+            u32 const* ref_tag_occupancy       = &m_ecs->m_per_entity_tags[g_entity_index(m_entity_reference) * m_ecs->m_tag_words_per_entity];
 
             entity_index = m_ecs->m_entity_state.next_used_up(entity_index);
             while (entity_index >= 0)

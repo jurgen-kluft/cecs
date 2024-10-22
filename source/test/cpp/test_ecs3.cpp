@@ -174,9 +174,9 @@ UNITTEST_SUITE_BEGIN(ecs3)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024, 256, 64);
 
-            g_register_component<u8_t>(ecs, 512, "");
-            g_register_component<position_t>(ecs, 512, "");
-            g_register_component<velocity_t>(ecs, 512, "");
+            g_register_component<u8_t>(ecs, 512);
+            g_register_component<position_t>(ecs, 512);
+            g_register_component<velocity_t>(ecs, 512);
 
             entity_t e01 = g_create_entity(ecs);
             entity_t e02 = g_create_entity(ecs);
@@ -255,14 +255,12 @@ UNITTEST_SUITE_BEGIN(ecs3)
                 while (!iter.end())
                 {
                     entity_t e = iter.entity();
-                    CHECK_TRUE(e == e01 && index == 0);
-                    CHECK_TRUE(e == e02 && index == 1);
-                    CHECK_TRUE(e == e03 && index == 2);
-                    CHECK_TRUE(e == e04 && index == 3);
+                    CHECK_TRUE((e == e01 && index == 0) || (e == e02 && index == 1) || (e == e03 && index == 2) || (e == e04 && index == 3));
 
                     CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
 
                     iter.next();
+                    index += 1;
                 }
             }
 

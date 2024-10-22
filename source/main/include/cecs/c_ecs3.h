@@ -45,9 +45,9 @@ namespace ncore
         const u32 ECS_ENTITY_GEN_ID_MASK = (0xFF000000); // Mask to use to get the generation id from an entity identifier
         const s8  ECS_ENTITY_GEN_SHIFT   = (24);         // Extent of the entity id + type within an identifier
 
-        inline bool                s_entity_is_null(entity_t e) { return e == ECS_ENTITY_NULL; }
-        inline entity_generation_t s_entity_generation(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_SHIFT; }
-        inline entity_index_t      s_entity_index(entity_t e) { return (entity_index_t)e & ECS_ENTITY_INDEX_MASK; }
+        inline bool                g_entity_is_null(entity_t e) { return e == ECS_ENTITY_NULL; }
+        inline entity_generation_t g_entity_generation(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_SHIFT; }
+        inline entity_index_t      g_entity_index(entity_t e) { return (entity_index_t)e & ECS_ENTITY_INDEX_MASK; }
 
         struct ecs_t;
 
@@ -73,7 +73,7 @@ namespace ncore
         // Register a Component under a Component Group
         bool                       g_register_component(ecs_t* ecs, u32 max_components, u32 cp_index, s32 cp_sizeof, s32 cp_alignof = 8, const char* cp_name = "");
         void                       g_unregister_component(ecs_t* ecs, u32 cp_index);
-        template <typename T> bool g_register_component(ecs_t* ecs, u32 max_components, const char* cp_name) { return g_register_component(ecs, max_components, T::ECS3_COMPONENT_INDEX, sizeof(T), alignof(T), cp_name); }
+        template <typename T> bool g_register_component(ecs_t* ecs, u32 max_components, const char* cp_name="") { return g_register_component(ecs, max_components, T::ECS3_COMPONENT_INDEX, sizeof(T), alignof(T), cp_name); }
         template <typename T> void g_unregister_component(ecs_t* ecs) { g_unregister_component(ecs, T::ECS3_COMPONENT_INDEX); }
 
         bool  g_has_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
@@ -108,7 +108,8 @@ namespace ncore
 
         struct en_iterator_t
         {
-            en_iterator_t(ecs_t* ecs, entity_t entity_reference = ECS_ENTITY_NULL);
+            en_iterator_t(ecs_t* ecs);
+            en_iterator_t(ecs_t* ecs, entity_t entity_reference);
 
             // Example:
             //     entity_t entity_reference = g_create_entity(ecs);
@@ -129,7 +130,7 @@ namespace ncore
             //     g_destroy_entity(ecs, entity_reference);
             //
 
-            void        begin() { m_entity_index = (m_entity_reference != ECS_ENTITY_NULL) ? find(0) : -1; }
+            void        begin() { m_entity_index = find(0); }
             inline void next() { m_entity_index = m_entity_index >= 0 ? find(m_entity_index + 1) : -1; }
             inline bool end() const { return m_entity_index < 0; }
             entity_t    entity() const;
