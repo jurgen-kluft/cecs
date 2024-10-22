@@ -1,6 +1,7 @@
 #include "ccore/c_target.h"
 #include "ccore/c_allocator.h"
 #include "cbase/c_buffer.h"
+#include "cbase/c_random.h"
 #include "cecs/c_ecs3.h"
 
 #include "cunittest/cunittest.h"
@@ -142,12 +143,82 @@ UNITTEST_SUITE_BEGIN(ecs3)
 
             position_t* cpa2 = g_add_cp<position_t>(ecs, e01);
             CHECK_NOT_NULL(cpa2);
+            CHECK_NOT_EQUAL((void*)cpa1, (void*)cpa2);
             CHECK_TRUE(g_has_cp<position_t>(ecs, e01));
             position_t* cp2 = g_get_cp<position_t>(ecs, e01);
             CHECK_NOT_NULL(cp2);
             CHECK_EQUAL(cpa2, cp2);
 
             g_destroy_entity(ecs, e01);
+
+            g_unregister_component<u8_t>(ecs);
+
+            g_destroy_ecs(ecs);
+        }
+
+        static void RandomShuffle(entity_t * v, s32 size, u64 seed)
+        {
+            xor_random_t rng(seed);
+            for (s32 i = 0; i < size; ++i)
+            {
+                const s32      j = (s32)(random_u32(&rng) & 0x7fffffff) % size;
+                const entity_t t = v[i];
+                v[i]             = v[j];
+                v[j]             = t;
+            }
+        }
+
+        UNITTEST_TEST(create_entities_with_components)
+        {
+            ecs_t* ecs = g_create_ecs(Allocator, 1024, 1024, 64);
+
+            g_register_component<u8_t>(ecs, 512, "u8");
+            g_register_component<position_t>(ecs, 512, "position");
+            g_register_component<velocity_t>(ecs, 512, "velocity");
+
+            const s32 num_entities = 500;
+            entity_t* entities     = g_allocate_array<entity_t>(Allocator, num_entities);
+            for (s32 i = 0; i < num_entities; ++i)
+            {
+                entity_t e  = g_create_entity(ecs);
+                entities[i] = e;
+
+                g_add_cp<u8_t>(ecs, e);
+                g_add_cp<position_t>(ecs, e);
+                g_add_cp<velocity_t>(ecs, e);
+
+                u8_t* cpa1 = g_add_cp<u8_t>(ecs, e);
+                CHECK_NOT_NULL(cpa1);
+                CHECK_TRUE(g_has_cp<u8_t>(ecs, e));
+                u8_t* cp1 = g_get_cp<u8_t>(ecs, e);
+                CHECK_NOT_NULL(cp1);
+                CHECK_EQUAL((void const*)cpa1, (void const*)cp1);
+
+                position_t* cpa2 = g_add_cp<position_t>(ecs, e);
+                CHECK_NOT_NULL(cpa2);
+                CHECK_NOT_EQUAL((void const*)cpa1, (void const*)cpa2);
+                CHECK_TRUE(g_has_cp<position_t>(ecs, e));
+                position_t* cp2 = g_get_cp<position_t>(ecs, e);
+                CHECK_NOT_NULL(cp2);
+                CHECK_EQUAL((void const*)cpa2, (void const*)cp2);
+
+                velocity_t* cpa3 = g_add_cp<velocity_t>(ecs, e);
+                CHECK_NOT_NULL(cpa3);
+                CHECK_NOT_EQUAL((void const*)cpa1, (void const*)cpa3);
+                CHECK_NOT_EQUAL((void const*)cpa2, (void const*)cpa3);
+                CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
+                velocity_t* cp3 = g_get_cp<velocity_t>(ecs, e);
+                CHECK_NOT_NULL(cp3);
+                CHECK_EQUAL((void const*)cpa3, (void const*)cp3);
+            }
+
+            RandomShuffle(entities, num_entities, 0xdeadbeef);
+            for (s32 i = 0; i < num_entities; ++i)
+            {
+                g_destroy_entity(ecs, entities[i]);
+            }
+
+            g_deallocate_array<entity_t>(Allocator, entities);
 
             g_unregister_component<u8_t>(ecs);
 

@@ -184,7 +184,11 @@ namespace ncore
                 component_occupancy[cp_index >> 5] |= (1 << (cp_index & 31));
                 return &container->m_component_data[local_component_index * container->m_sizeof_component];
             }
-            return nullptr;
+            else
+            {
+                u32 const local_component_index = container->m_redirect[entity_index];
+                return &container->m_component_data[local_component_index * container->m_sizeof_component];
+            }
         }
 
         void g_rem_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
