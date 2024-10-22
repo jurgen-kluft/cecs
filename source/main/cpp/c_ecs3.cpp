@@ -174,10 +174,7 @@ namespace ncore
                     container->m_occupancy.tick_all_free_lazy(container->m_free_index);
                     local_component_index = container->m_free_index++;
                 }
-                else
-                {
-                    local_component_index = container->m_occupancy.find_and_set();
-                }
+                container->m_occupancy.set_used(local_component_index);
 
                 container->m_redirect[entity_index] = local_component_index;
                 u32* component_occupancy            = &ecs->m_per_entity_component_occupancy[entity_index * ecs->m_component_words_per_entity];
@@ -221,9 +218,9 @@ namespace ncore
             if (container->m_sizeof_component == 0)
                 return nullptr;
 
-            u32 const index = g_entity_index(entity);
-            if (container->m_redirect[index] >= 0)
-                return &container->m_component_data[container->m_redirect[index] * container->m_sizeof_component];
+            u32 const entity_index = g_entity_index(entity);
+            if (container->m_redirect[entity_index] >= 0)
+                return &container->m_component_data[container->m_redirect[entity_index] * container->m_sizeof_component];
             return nullptr;
         }
 

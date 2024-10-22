@@ -14,20 +14,20 @@ namespace ncore
     struct position_t
     {
         DECLARE_ECS3_COMPONENT(0);
-        f32 x, y, z;
+        u32 x, y, z;
     };
 
     struct velocity_t
     {
         DECLARE_ECS3_COMPONENT(1);
-        f32 x, y, z;
-        f32 speed;
+        u32 x, y, z;
+        u32 speed;
     };
 
     struct physics_state_t
     {
         DECLARE_ECS3_COMPONENT(2);
-        bool at_rest;
+        s32 rest;
     };
 
     struct u8_t
@@ -187,7 +187,8 @@ UNITTEST_SUITE_BEGIN(ecs3)
                 g_add_cp<position_t>(ecs, e);
                 g_add_cp<velocity_t>(ecs, e);
 
-                u8_t* cpa1 = g_add_cp<u8_t>(ecs, e);
+                u8_t* cpa1  = g_add_cp<u8_t>(ecs, e);
+                cpa1->value = (u8)i;
                 CHECK_NOT_NULL(cpa1);
                 CHECK_TRUE(g_has_cp<u8_t>(ecs, e));
                 u8_t* cp1 = g_get_cp<u8_t>(ecs, e);
@@ -195,6 +196,9 @@ UNITTEST_SUITE_BEGIN(ecs3)
                 CHECK_EQUAL((void const*)cpa1, (void const*)cp1);
 
                 position_t* cpa2 = g_add_cp<position_t>(ecs, e);
+                cpa2->x          = (u32)i;
+                cpa2->y          = (u32)i;
+                cpa2->z          = (u32)i;
                 CHECK_NOT_NULL(cpa2);
                 CHECK_NOT_EQUAL((void const*)cpa1, (void const*)cpa2);
                 CHECK_TRUE(g_has_cp<position_t>(ecs, e));
@@ -203,6 +207,10 @@ UNITTEST_SUITE_BEGIN(ecs3)
                 CHECK_EQUAL((void const*)cpa2, (void const*)cp2);
 
                 velocity_t* cpa3 = g_add_cp<velocity_t>(ecs, e);
+                cpa3->x          = (u32)i + 1 + (num_entities * 10);
+                cpa3->y          = (u32)i + 2 + (num_entities * 10);
+                cpa3->z          = (u32)i + 3 + (num_entities * 10);
+                cpa3->speed      = (u32)i + 4 + (num_entities * 10);
                 CHECK_NOT_NULL(cpa3);
                 CHECK_NOT_EQUAL((void const*)cpa1, (void const*)cpa3);
                 CHECK_NOT_EQUAL((void const*)cpa2, (void const*)cpa3);
@@ -210,6 +218,29 @@ UNITTEST_SUITE_BEGIN(ecs3)
                 velocity_t* cp3 = g_get_cp<velocity_t>(ecs, e);
                 CHECK_NOT_NULL(cp3);
                 CHECK_EQUAL((void const*)cpa3, (void const*)cp3);
+            }
+
+            // Verify the contents of the components
+            for (s32 i = 0; i < num_entities; ++i)
+            {
+                entity_t e = entities[i];
+
+                u8_t* cp1 = g_get_cp<u8_t>(ecs, e);
+                CHECK_NOT_NULL(cp1);
+                CHECK_EQUAL(cp1->value, (u8)i);
+
+                position_t* cp2 = g_get_cp<position_t>(ecs, e);
+                CHECK_NOT_NULL(cp2);
+                CHECK_EQUAL(cp2->x, (u32)i);
+                CHECK_EQUAL(cp2->y, (u32)i);
+                CHECK_EQUAL(cp2->z, (u32)i);
+
+                velocity_t* cp3 = g_get_cp<velocity_t>(ecs, e);
+                CHECK_NOT_NULL(cp3);
+                CHECK_EQUAL(cp3->x, (u32)i + 1 + (num_entities * 10));
+                CHECK_EQUAL(cp3->y, (u32)i + 2 + (num_entities * 10));
+                CHECK_EQUAL(cp3->z, (u32)i + 3 + (num_entities * 10));
+                CHECK_EQUAL(cp3->speed, (u32)i + 4 + (num_entities * 10));
             }
 
             RandomShuffle(entities, num_entities, 0xdeadbeef);
