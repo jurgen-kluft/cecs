@@ -10,7 +10,6 @@ namespace ncore
     namespace necs2
     {
         // ECS Version 2, a simple Entity-Component-System (ECS) implementation.
-
         typedef u32 entity_t;
         typedef u8  entity_generation_t;
         typedef u32 entity_index_t;
@@ -26,39 +25,39 @@ namespace ncore
 
         struct ecs_t;
 
-#define DECLARE_ECS_GROUP(N) \
-    enum                     \
-    {                        \
-        ECS_GROUP_INDEX = N  \
+#define DECLARE_ECS2_GROUP(N) \
+    enum                      \
+    {                         \
+        ECS_GROUP2_INDEX = N  \
     }
-#define DECLARE_ECS_COMPONENT(N) \
-    enum                         \
-    {                            \
-        ECS_COMPONENT_INDEX = N  \
+#define DECLARE_ECS2_COMPONENT(N) \
+    enum                          \
+    {                             \
+        ECS_COMPONENT2_INDEX = N  \
     }
-#define DECLARE_ECS_TAG(N) \
-    enum                   \
-    {                      \
-        ECS_TAG_INDEX = N  \
+#define DECLARE_ECS2_TAG(N) \
+    enum                    \
+    {                       \
+        ECS_TAG2_INDEX = N  \
     }
 
         // Register a Component Group with an ECS
         extern bool                g_register_cp_group(ecs_t* ecs, u32 cg_max_entities, u32 cg_index, const char* cg_name);
         extern void                g_unregister_cp_group(ecs_t* ecs, u32 cg_index);
-        template <typename T> bool g_register_group(ecs_t* ecs, const char* cg_name, u32 max_entities) { return g_register_cp_group(ecs, max_entities, T::ECS_GROUP_INDEX, cg_name); }
-        template <typename T> void g_unregister_group(ecs_t* ecs) { g_unregister_cp_group(ecs, T::ECS_GROUP_INDEX); }
+        template <typename T> bool g_register_group(ecs_t* ecs, const char* cg_name, u32 max_entities) { return g_register_cp_group(ecs, max_entities, T::ECS_GROUP2_INDEX, cg_name); }
+        template <typename T> void g_unregister_group(ecs_t* ecs) { g_unregister_cp_group(ecs, T::ECS_GROUP2_INDEX); }
 
         // Register a Component under a Component Group
-        extern bool                            g_register_cp_type(ecs_t* ecs, u32 cg_index, u32 cp_index, const char* cp_name, s32 cp_sizeof, s32 cp_alignof = 8);
-        extern void                            g_unregister_cp_type(ecs_t* ecs, u32 cg_index, u32 cp_index);
-        template <typename G, typename T> bool g_register_component(ecs_t* ecs, const char* cp_name) { return g_register_cp_type(ecs, G::ECS_GROUP_INDEX, T::ECS_COMPONENT_INDEX, cp_name, sizeof(T), alignof(T)); }
-        template <typename G, typename T> void g_unregister_component(ecs_t* ecs) { g_unregister_cp_type(ecs, G::ECS_GROUP_INDEX, T::ECS_COMPONENT_INDEX); }
+        extern bool                            g_register_component(ecs_t* ecs, u32 cg_index, u32 cp_index, const char* cp_name, s32 cp_sizeof, s32 cp_alignof = 8);
+        extern void                            g_unregister_component(ecs_t* ecs, u32 cg_index, u32 cp_index);
+        template <typename G, typename T> bool g_register_component(ecs_t* ecs, const char* cp_name) { return g_register_component(ecs, G::ECS_GROUP2_INDEX, T::ECS_COMPONENT2_INDEX, cp_name, sizeof(T), alignof(T)); }
+        template <typename G, typename T> void g_unregister_component(ecs_t* ecs) { g_unregister_component(ecs, G::ECS_GROUP2_INDEX, T::ECS_COMPONENT2_INDEX); }
 
         // Register a Tag under a Component Group
-        extern bool                            g_register_tg_type(ecs_t* ecs, u32 cg_index, u32 tg_index, const char* tg_name);
-        extern void                            g_unregister_tg_type(ecs_t* ecs, u32 cg_index, u32 tg_index);
-        template <typename G, typename T> bool g_register_tag(ecs_t* ecs, const char* tg_name) { return g_register_tg_type(ecs, G::ECS_GROUP_INDEX, T::ECS_TAG_INDEX, tg_name); }
-        template <typename G, typename T> void g_unregister_tag(ecs_t* ecs) { g_unregister_tg_type(ecs, G::ECS_GROUP_INDEX, T::ECS_TAG_INDEX); }
+        extern bool                            g_register_tag(ecs_t* ecs, u32 cg_index, u32 tg_index, const char* tg_name);
+        extern void                            g_unregister_tag(ecs_t* ecs, u32 cg_index, u32 tg_index);
+        template <typename G, typename T> bool g_register_tag(ecs_t* ecs, const char* tg_name) { return g_register_tag(ecs, G::ECS_GROUP2_INDEX, T::ECS_TAG2_INDEX, tg_name); }
+        template <typename G, typename T> void g_unregister_tag(ecs_t* ecs) { g_unregister_tag(ecs, G::ECS_GROUP2_INDEX, T::ECS_TAG2_INDEX); }
 
         extern ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities);
         extern void   g_destroy_ecs(ecs_t* ecs);
@@ -68,20 +67,20 @@ namespace ncore
         extern void     g_destroy_entity(ecs_t* ecs, entity_t e);
 
         extern bool                       g_has_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
-        template <typename T> extern bool g_has_cp(ecs_t* ecs, entity_t entity) { return g_has_cp(ecs, entity, T::ECS_COMPONENT_INDEX); }
+        template <typename T> extern bool g_has_cp(ecs_t* ecs, entity_t entity) { return g_has_cp(ecs, entity, T::ECS_COMPONENT2_INDEX); }
         extern void*                      g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
-        template <typename T> T*          g_add_cp(ecs_t* ecs, entity_t entity) { return (T*)g_add_cp(ecs, entity, T::ECS_COMPONENT_INDEX); }
+        template <typename T> T*          g_add_cp(ecs_t* ecs, entity_t entity) { return (T*)g_add_cp(ecs, entity, T::ECS_COMPONENT2_INDEX); }
         extern void                       g_rem_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
-        template <typename T> void        g_rem_cp(ecs_t* ecs, entity_t entity) { g_rem_cp(ecs, entity, T::ECS_COMPONENT_INDEX); }
+        template <typename T> void        g_rem_cp(ecs_t* ecs, entity_t entity) { g_rem_cp(ecs, entity, T::ECS_COMPONENT2_INDEX); }
         extern void*                      g_get_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
-        template <typename T> T*          g_get_cp(ecs_t* ecs, entity_t entity) { return (T*)g_get_cp(ecs, entity, T::ECS_COMPONENT_INDEX); }
+        template <typename T> T*          g_get_cp(ecs_t* ecs, entity_t entity) { return (T*)g_get_cp(ecs, entity, T::ECS_COMPONENT2_INDEX); }
 
         extern bool                g_has_tag(ecs_t* ecs, entity_t entity, u32 tg_index);
-        template <typename T> bool g_has_tag(ecs_t* ecs, entity_t entity) { return g_has_tag(ecs, entity, T::ECS_TAG_INDEX); }
+        template <typename T> bool g_has_tag(ecs_t* ecs, entity_t entity) { return g_has_tag(ecs, entity, T::ECS_TAG2_INDEX); }
         extern void                g_add_tag(ecs_t* ecs, entity_t entity, u32 tg_index);
-        template <typename T> void g_add_tag(ecs_t* ecs, entity_t entity) { g_add_tag(ecs, entity, T::ECS_TAG_INDEX); }
+        template <typename T> void g_add_tag(ecs_t* ecs, entity_t entity) { g_add_tag(ecs, entity, T::ECS_TAG2_INDEX); }
         extern void                g_rem_tag(ecs_t* ecs, entity_t entity, u32 tg_index);
-        template <typename T> void g_rem_tag(ecs_t* ecs, entity_t entity) { g_rem_tag(ecs, entity, T::ECS_TAG_INDEX); }
+        template <typename T> void g_rem_tag(ecs_t* ecs, entity_t entity) { g_rem_tag(ecs, entity, T::ECS_TAG2_INDEX); }
 
         struct en_iterator_t
         {
@@ -97,8 +96,8 @@ namespace ncore
             void set_cp_type(u32 cp_index); // Mark the things you want to iterate on
             void set_tg_type(u32 tg_index) { set_cp_type(tg_index); }
 
-            template <typename T> void set_cp_type() { set_cp_type(T::ECS_COMPONENT_INDEX); }
-            template <typename T> void set_tg_type() { set_tg_type(T::ECS_TAG_INDEX); }
+            template <typename T> void set_cp_type() { set_cp_type(T::ECS_COMPONENT2_INDEX); }
+            template <typename T> void set_tg_type() { set_tg_type(T::ECS_TAG2_INDEX); }
 
             // Example:
             //     en_iterator_t iter(ecs);
