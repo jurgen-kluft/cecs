@@ -26,15 +26,6 @@ namespace ncore
             const char* m_name;
         };
 
-        static void s_teardown(alloc_t* allocator, component_container_t* container)
-        {
-            allocator->deallocate(container->m_component_data);
-            allocator->deallocate(container->m_redirect);
-            container->m_occupancy.release(allocator);
-            container->m_free_index       = 0;
-            container->m_sizeof_component = 0;
-        }
-
         struct ecs_t
         {
             DCORE_CLASS_PLACEMENT_NEW_DELETE
@@ -49,6 +40,15 @@ namespace ncore
             component_container_t* m_component_containers;
             duomap_t               m_entity_state;
         };
+
+        static void s_teardown(alloc_t* allocator, component_container_t* container)
+        {
+            allocator->deallocate(container->m_component_data);
+            allocator->deallocate(container->m_redirect);
+            container->m_occupancy.release(allocator);
+            container->m_free_index       = 0;
+            container->m_sizeof_component = 0;
+        }
 
         ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities, u32 max_components, u32 max_tags)
         {

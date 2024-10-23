@@ -70,7 +70,7 @@ namespace ncore
         entity_t g_create_entity(ecs_t* ecs);
         void     g_destroy_entity(ecs_t* ecs, entity_t e);
 
-        // Register a Component under a Component Group
+        // Components
         bool                       g_register_component(ecs_t* ecs, u32 max_components, u32 cp_index, s32 cp_sizeof, s32 cp_alignof = 8, const char* cp_name = "");
         void                       g_unregister_component(ecs_t* ecs, u32 cp_index);
         template <typename T> bool g_register_component(ecs_t* ecs, u32 max_components, const char* cp_name="") { return g_register_component(ecs, max_components, T::ECS3_COMPONENT_INDEX, sizeof(T), alignof(T), cp_name); }
@@ -86,6 +86,7 @@ namespace ncore
         template <typename T> void g_rem_cp(ecs_t* ecs, entity_t entity) { g_rem_cp(ecs, entity, T::ECS3_COMPONENT_INDEX); }
         template <typename T> T*   g_get_cp(ecs_t* ecs, entity_t entity) { return (T*)g_get_cp(ecs, entity, T::ECS3_COMPONENT_INDEX); }
 
+        // Tags
         bool g_has_tag(ecs_t* ecs, entity_t entity, s16 tg_index);
         void g_add_tag(ecs_t* ecs, entity_t entity, s16 tg_index);
         void g_rem_tag(ecs_t* ecs, entity_t entity, s16 tg_index);
@@ -106,6 +107,7 @@ namespace ncore
             g_rem_tag(ecs, entity, (s16)T::ECS3_TAG_INDEX);
         }
 
+        // Iterator
         struct en_iterator_t
         {
             en_iterator_t(ecs_t* ecs);
