@@ -10,6 +10,37 @@ namespace ncore
 {
     namespace necs3
     {
+        // Notes on memory reduction but introducing indirection:
+        //
+        // 2 indirection arrays per entity and limiting entity to have a max of 256 components
+        //
+        // u32:
+        //
+        // 2048 max components
+        //
+        // entity has a max of 256 components
+        // 2048 * sizeof(byte) + 256 * 4 = 3072 bytes per entity
+        //
+        // If we naively use an indirection array per component, that would take:
+        // 2048 * 4 = 8192 bytes per entity
+        //
+        // u16:
+        //
+        // 2048 max components
+        //
+        // entity has a max of 256 components
+        // 2048 * sizeof(byte) + 256 * 2 = 2560 bytes per entity
+        //
+        // If we naively use an indirection array per component, that would take:
+        // 2048 * 2 = 4096 bytes per entity
+        //
+        //
+        // Observation:
+        //
+        // If we limit each component container to hold a maximum of 65536 components, we can use u16 for
+        // indirection array. This would reduce the memory footprint of each entity to 4096 bytes when
+        // the maximum number of components is 2048.
+
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
