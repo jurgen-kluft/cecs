@@ -1,6 +1,7 @@
 #include "ccore/c_target.h"
 #include "ccore/c_allocator.h"
 #include "ccore/c_debug.h"
+#include "ccore/c_memory.h"
 #include "cbase/c_duomap.h"
 #include "cbase/c_integer.h"
 
@@ -52,8 +53,8 @@ namespace ncore
             u32         m_free_index;
             u32         m_sizeof_component;
             byte*       m_component_data;
-            s32*        m_redirect;
-            binmap_t    m_occupancy;
+            u32*        m_global_to_local;
+            u32*        m_local_to_global;
             const char* m_name;
         };
 
@@ -74,11 +75,12 @@ namespace ncore
 
         static void s_teardown(alloc_t* allocator, component_container_t* container)
         {
-            allocator->deallocate(container->m_component_data);
-            allocator->deallocate(container->m_redirect);
-            container->m_occupancy.release(allocator);
+            g_deallocate_array(allocator, container->m_component_data);
+            g_deallocate_array(allocator, container->m_global_to_local);
+            g_deallocate_array(allocator, container->m_local_to_global);
             container->m_free_index       = 0;
             container->m_sizeof_component = 0;
+            container->m_name             = "";
         }
 
         ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities, u32 max_components, u32 max_tags)
@@ -113,11 +115,15 @@ namespace ncore
                 if (container->m_sizeof_component > 0)
                     s_teardown(allocator, container);
             }
-            allocator->deallocate(ecs->m_component_containers);
 
-            allocator->deallocate(ecs->m_per_entity_tags);
-            allocator->deallocate(ecs->m_per_entity_component_occupancy);
-            allocator->deallocate(ecs->m_per_entity_generation);
+            // allocator->deallocate(ecs->m_component_containers);
+            // allocator->deallocate(ecs->m_per_entity_tags);
+            // allocator->deallocate(ecs->m_per_entity_component_occupancy);
+            // allocator->deallocate(ecs->m_per_entity_generation);
+            g_deallocate_array(allocator, ecs->m_component_containers);
+            g_deallocate_array(allocator, ecs->m_per_entity_tags);
+            g_deallocate_array(allocator, ecs->m_per_entity_component_occupancy);
+            g_deallocate_array(allocator, ecs->m_per_entity_generation);
 
             ecs->m_entity_state.release(allocator);
 
@@ -162,11 +168,9 @@ namespace ncore
                 container->m_free_index          = 0;
                 container->m_sizeof_component    = cp_sizeof;
                 container->m_component_data      = g_allocate_array<byte>(ecs->m_allocator, cp_sizeof * max_components);
-                container->m_redirect            = g_allocate_array_and_memset<s32>(ecs->m_allocator, ecs->m_max_entities, -1);
+                container->m_global_to_local     = g_allocate_array_and_memset<u32>(ecs->m_allocator, ecs->m_max_entities, 0xFFFFFFFF);
+                container->m_local_to_global     = g_allocate_array_and_memset<u32>(ecs->m_allocator, max_components, 0xFFFFFFFF);
                 container->m_name                = cp_name;
-
-                binmap_t::config_t const cfg = binmap_t::config_t::compute(max_components);
-                container->m_occupancy.init_all_free_lazy(cfg, ecs->m_allocator);
                 return true;
             }
             return false;
@@ -195,49 +199,50 @@ namespace ncore
                 return nullptr;
 
             u32 const entity_index = g_entity_index(entity);
-            if (container->m_redirect[entity_index] < 0)
+            if (container->m_global_to_local[entity_index] == 0xFFFFFFFF)
             {
-                s32 local_component_index = container->m_occupancy.find();
-                if (local_component_index == -1)
-                {
-                    if (container->m_free_index >= container->m_occupancy.size())
-                        return nullptr;
-                    container->m_occupancy.tick_all_free_lazy(container->m_free_index);
-                    local_component_index = container->m_free_index++;
-                }
-                container->m_occupancy.set_used(local_component_index);
-
-                container->m_redirect[entity_index] = local_component_index;
-                u32* component_occupancy            = &ecs->m_per_entity_component_occupancy[entity_index * ecs->m_component_words_per_entity];
+                s32 const local_index                      = container->m_free_index++;
+                container->m_global_to_local[entity_index] = local_index;
+                container->m_local_to_global[local_index]  = entity_index;
+                u32* component_occupancy                   = &ecs->m_per_entity_component_occupancy[entity_index * ecs->m_component_words_per_entity];
                 component_occupancy[cp_index >> 5] |= (1 << (cp_index & 31));
-                return &container->m_component_data[local_component_index * container->m_sizeof_component];
+                return &container->m_component_data[local_index * container->m_sizeof_component];
             }
             else
             {
-                u32 const local_component_index = container->m_redirect[entity_index];
-                return &container->m_component_data[local_component_index * container->m_sizeof_component];
+                u32 const local_index = container->m_global_to_local[entity_index];
+                return &container->m_component_data[local_index * container->m_sizeof_component];
             }
         }
 
         void g_rem_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            if (cp_index >= ecs->m_max_components)
-                return;
-
             component_container_t* container = &ecs->m_component_containers[cp_index];
-            if (container->m_sizeof_component == 0)
+            if (container->m_sizeof_component == 0 || cp_index >= container->m_free_index)
                 return;
 
             u32 const entity_index = g_entity_index(entity);
-            if (container->m_redirect[entity_index] >= 0)
-            {
-                s32 const local_component_index     = container->m_redirect[entity_index];
-                container->m_redirect[entity_index] = -1;
-                container->m_occupancy.set_free(local_component_index);
+            ASSERT(container->m_global_to_local[entity_index] != 0xFFFFFFFF);
 
-                u32* component_occupancy = &ecs->m_per_entity_component_occupancy[entity_index * ecs->m_component_words_per_entity];
-                component_occupancy[cp_index >> 5] &= ~(1 << (cp_index & 31));
+            s32 const local_index                      = container->m_global_to_local[entity_index];
+            container->m_global_to_local[entity_index] = 0xFFFFFFFF;
+            container->m_local_to_global[local_index]  = 0xFFFFFFFF;
+            container->m_free_index--;
+
+            // Move the last element to the current position
+            if (local_index != container->m_free_index)
+            {
+                u32 const last_entity_index                     = container->m_local_to_global[container->m_free_index];
+                container->m_global_to_local[last_entity_index] = local_index;
+                container->m_local_to_global[local_index]       = last_entity_index;
+
+                byte* const last_component_data = &container->m_component_data[container->m_free_index * container->m_sizeof_component];
+                byte* const cur_component_data  = &container->m_component_data[local_index * container->m_sizeof_component];
+                g_memcopy(cur_component_data, last_component_data, container->m_sizeof_component);
             }
+
+            u32* component_occupancy = &ecs->m_per_entity_component_occupancy[entity_index * ecs->m_component_words_per_entity];
+            component_occupancy[cp_index >> 5] &= ~(1 << (cp_index & 31));
         }
 
         void* g_get_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
@@ -250,8 +255,8 @@ namespace ncore
                 return nullptr;
 
             u32 const entity_index = g_entity_index(entity);
-            if (container->m_redirect[entity_index] >= 0)
-                return &container->m_component_data[container->m_redirect[entity_index] * container->m_sizeof_component];
+            if (container->m_global_to_local[entity_index] >= 0)
+                return &container->m_component_data[container->m_global_to_local[entity_index] * container->m_sizeof_component];
             return nullptr;
         }
 
