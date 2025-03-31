@@ -161,7 +161,7 @@ UNITTEST_SUITE_BEGIN(ecs3)
             xor_random_t rng(seed);
             for (s32 i = 0; i < size; ++i)
             {
-                const s32      j = (s32)(random_u32(&rng) & 0x7fffffff) % size;
+                const s32      j = (s32)(g_random_u32(&rng) & 0x7fffffff) % size;
                 const entity_t t = v[i];
                 v[i]             = v[j];
                 v[j]             = t;
