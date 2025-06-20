@@ -15,27 +15,6 @@ namespace ncore
     {
         // ECS Version 3, a simple Entity-Component-System (ECS) implementation.
 
-        //
-        // Component Container (local maximum):
-        //     u32        m_sizeof_component;
-        //     byte*      m_component_data;                  // [local max entities * sizeof component] the component data
-        //     u32*       m_redirect                         // [global max entities], re-directs a global entity index to a local entity index
-        //     duomap_t   m_occupancy                        // [local max entities] keeps track of free and used entities
-        //
-
-        // typedef u32 entity_t;
-        //
-        // u32      m_component_bytes_per_entity;            // [(max components+7)/8] The number of bytes per entity (preferably a power of 2)
-        // u32      m_tag_bytes_per_entity;                  // [(max tags+7)/8] The number of bytes per entity (preferably a power of 2)
-        // byte*    m_per_entity_generation;                 // A byte per entity to keep track of the generation
-        // byte*    m_per_entity_component_occupancy;        // Depending on 'max components' this is a certain number of bytes per entity
-        // byte*    m_per_entity_tag_occupancy;              // Depending on 'max tags' this is a certain number of bytes per entity
-        //
-        // component_container_t* m_component_containers;    // [global max components] the component containers
-        // tag_container_t* m_tag_containers;                // [global max tags] the tag containers
-        //
-
-        // ECS Version 2, a simple Entity-Component-System (ECS) implementation.
         typedef u32 entity_t;
         typedef u8  entity_generation_t;
         typedef u32 entity_index_t;
