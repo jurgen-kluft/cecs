@@ -85,7 +85,7 @@ namespace ncore
 
         ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities, u32 max_components, u32 max_tags)
         {
-            ecs_t* ecs = allocator->construct<ecs_t>();
+            ecs_t* ecs = g_construct<ecs_t>(allocator);
 
             ecs->m_allocator                  = allocator;
             ecs->m_max_entities               = max_entities;

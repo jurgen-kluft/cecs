@@ -333,7 +333,7 @@ namespace ncore
 
         ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities)
         {
-            ecs_t* ecs       = allocator->construct<ecs_t>();
+            ecs_t* ecs       = g_construct<ecs_t>(allocator);
             ecs->m_allocator = allocator;
             s_init(&ecs->m_cp_type_mgr, ECS_MAX_GROUPS, allocator);
             s_init(&ecs->m_cp_group_mgr, ECS_MAX_GROUPS, allocator);
