@@ -75,7 +75,7 @@ namespace ncore
             u32      cp_used   = group->m_cp_used;
             while (cp_used != 0)
             {
-                s32 index = math::g_findFirstBit(cp_used);
+                s32 index = math::findFirstBit(cp_used);
                 if (group->m_a_en_cp_data[index] != nullptr)
                     allocator->deallocate(group->m_a_en_cp_data[index]);
                 cp_used &= ~(1 << index);
@@ -86,7 +86,7 @@ namespace ncore
 
         static s8 s_cp_group_register_cp(component_group_t* group, component_type_t* cp_type)
         {
-            s8 const cp_id = math::g_findFirstBit(~group->m_cp_used);
+            s8 const cp_id = math::findFirstBit(~group->m_cp_used);
             if (cp_id >= 0 && cp_id < ECS_MAX_COMPONENTS_PER_GROUP)
             {
                 group->m_cp_used |= (1 << cp_id);
@@ -247,7 +247,7 @@ namespace ncore
             u64 groups_used = cp_group_mgr->m_cp_groups_used;
             while (groups_used != 0)
             {
-                s32 index = math::g_findFirstBit(groups_used);
+                s32 index = math::findFirstBit(groups_used);
                 groups_used &= ~(1 << index);
                 s_cp_group_destruct(&cp_group_mgr->m_cp_groups[index]);
             }
@@ -378,7 +378,7 @@ namespace ncore
             if ((entity_instance.m_cp_groups & cp_group_bit) == cp_group_bit)
             {
                 // How many '1' bits are there before 'cp_group_bit' in 'm_cp_groups'
-                u32 const gi      = math::g_countBits(entity_instance.m_cp_groups & (cp_group_bit - 1));
+                u32 const gi      = math::countBits(entity_instance.m_cp_groups & (cp_group_bit - 1));
                 u32 const cp_used = entity_instance.m_cp_group_cp_used[gi];
                 return (cp_used & (1 << cp_group_cp_index)) != 0;
             }
@@ -397,7 +397,7 @@ namespace ncore
             if (entity_instance.m_cp_groups & cp_group_bit)
             {
                 // How many '1' bits are there before in 'm_cp_group_cp_used'
-                u32 const gi      = math::g_countBits(entity_instance.m_cp_groups & (cp_group_bit - 1));
+                u32 const gi      = math::countBits(entity_instance.m_cp_groups & (cp_group_bit - 1));
                 u32 const cp_used = entity_instance.m_cp_group_cp_used[gi];
                 if (cp_used & (1 << cp_group_cp_index))
                 {
@@ -422,7 +422,7 @@ namespace ncore
             if ((entity_instance.m_cp_groups & c_group_bit) == 0)
             {
                 // An entity_instance can have a maximum of 7 component groups
-                if (math::g_countBits(entity_instance.m_cp_groups) == 7)
+                if (math::countBits(entity_instance.m_cp_groups) == 7)
                     return nullptr;
 
                 entity_instance.m_cp_groups |= c_group_bit;
@@ -430,7 +430,7 @@ namespace ncore
 
             // How many '1' bits are there before in 'm_cp_group_cp_used'
             u32 const gb      = entity_instance.m_cp_groups & (c_group_bit - 1);
-            s8 const  gi      = math::g_countBits(gb);
+            s8 const  gi      = math::countBits(gb);
             u32&      cp_used = entity_instance.m_cp_group_cp_used[gi];
             cp_used |= (1 << cp_group_cp_index);
 
@@ -455,7 +455,7 @@ namespace ncore
             {
                 // How many '1' bits are there before in 'm_cp_group_cp_used'
                 u32 const gb      = entity_instance.m_cp_groups & ((1 << cp_group_index) - 1);
-                s8 const  gi      = math::g_countBits(gb);
+                s8 const  gi      = math::countBits(gb);
                 u32&      cp_used = entity_instance.m_cp_group_cp_used[gi];
                 cp_used &= ~(1 << cp_group_cp_index);
 
@@ -531,7 +531,7 @@ namespace ncore
             s8 const                cp_group_cp_index = cp_type->cp_group_cp_index;
 
             u32 const group_bit    = (1 << cp_group_index);
-            s8 const  groups_pivot = math::g_countBits(m_group_mask & (group_bit - 1));
+            s8 const  groups_pivot = math::countBits(m_group_mask & (group_bit - 1));
             if ((m_group_mask & group_bit) == 0)
             {
                 // This is a new group, and we need to insert it at the correct position, so some
@@ -568,11 +568,11 @@ namespace ncore
                     u64 iter_group_mask   = ~0;
                     for (s8 i = 0; i < iter.m_num_groups; ++i)
                     {
-                        s8 const iter_group_index   = math::g_findFirstBit(iter.m_group_mask & iter_group_mask);
-                        s8       entity_group_index = math::g_findFirstBit(entity_instance.m_cp_groups & entity_group_mask);
+                        s8 const iter_group_index   = math::findFirstBit(iter.m_group_mask & iter_group_mask);
+                        s8       entity_group_index = math::findFirstBit(entity_instance.m_cp_groups & entity_group_mask);
                         while (entity_group_index < iter_group_index)
                         {
-                            entity_group_index = math::g_findFirstBit(entity_instance.m_cp_groups & ~(1 << entity_group_index));
+                            entity_group_index = math::findFirstBit(entity_instance.m_cp_groups & ~(1 << entity_group_index));
                             ASSERT(entity_group_index < 0); // This should not be possible!
                         }
 

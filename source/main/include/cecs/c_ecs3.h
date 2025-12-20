@@ -66,24 +66,24 @@ namespace ncore
         template <typename T> T*   g_get_cp(ecs_t* ecs, entity_t entity) { return (T*)g_get_cp(ecs, entity, T::ECS3_COMPONENT_INDEX); }
 
         // Tags
-        bool g_has_tag(ecs_t* ecs, entity_t entity, s16 tg_index);
-        void g_add_tag(ecs_t* ecs, entity_t entity, s16 tg_index);
-        void g_rem_tag(ecs_t* ecs, entity_t entity, s16 tg_index);
+        bool g_has_tag(ecs_t* ecs, entity_t entity, u16 tg_index);
+        void g_add_tag(ecs_t* ecs, entity_t entity, u16 tg_index);
+        void g_rem_tag(ecs_t* ecs, entity_t entity, u16 tg_index);
 
         template <typename T> bool g_has_tag(ecs_t* ecs, entity_t entity)
         {
             ASSERT(T::ECS3_TAG_INDEX < 1024);
-            return g_has_tag(ecs, entity, (s16)T::ECS3_TAG_INDEX);
+            return g_has_tag(ecs, entity, (u16)T::ECS3_TAG_INDEX);
         }
         template <typename T> void g_add_tag(ecs_t* ecs, entity_t entity)
         {
             ASSERT(T::ECS3_TAG_INDEX < 1024);
-            g_add_tag(ecs, entity, (s16)T::ECS3_TAG_INDEX);
+            g_add_tag(ecs, entity, (u16)T::ECS3_TAG_INDEX);
         }
         template <typename T> void g_rem_tag(ecs_t* ecs, entity_t entity)
         {
             ASSERT(T::ECS3_TAG_INDEX < 1024);
-            g_rem_tag(ecs, entity, (s16)T::ECS3_TAG_INDEX);
+            g_rem_tag(ecs, entity, (u16)T::ECS3_TAG_INDEX);
         }
 
         // Iterator

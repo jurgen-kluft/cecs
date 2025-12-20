@@ -224,7 +224,7 @@ namespace ncore
             u32 const entity_index = g_entity_index(entity);
             ASSERT(container->m_global_to_local[entity_index] != 0xFFFFFFFF);
 
-            s32 const local_index                      = container->m_global_to_local[entity_index];
+            u32 const local_index                      = container->m_global_to_local[entity_index];
             container->m_global_to_local[entity_index] = 0xFFFFFFFF;
             container->m_local_to_global[local_index]  = 0xFFFFFFFF;
             container->m_free_index--;
@@ -260,7 +260,7 @@ namespace ncore
             return nullptr;
         }
 
-        bool g_has_tag(ecs_t* ecs, entity_t entity, s16 tg_index)
+        bool g_has_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
             if (tg_index >= ecs->m_max_components)
                 return false;
@@ -269,7 +269,7 @@ namespace ncore
             return (tag_occupancy[tg_index >> 5] & (1 << (tg_index & 31))) != 0;
         }
 
-        void g_add_tag(ecs_t* ecs, entity_t entity, s16 tg_index)
+        void g_add_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
             if (tg_index >= ecs->m_max_components)
                 return;
@@ -278,7 +278,7 @@ namespace ncore
             tag_occupancy[tg_index >> 5] |= (1 << (tg_index & 31));
         }
 
-        void g_rem_tag(ecs_t* ecs, entity_t entity, s16 tg_index)
+        void g_rem_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
             if (tg_index >= ecs->m_max_components)
                 return;

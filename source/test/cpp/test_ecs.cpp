@@ -48,8 +48,8 @@ UNITTEST_SUITE_BEGIN(necs)
         UNITTEST_TEST(register_entity_types)
         {
             ecs_t*     ecs  = g_create_ecs(Allocator);
-            en_type_t* ent0 = g_register_entity_type(ecs, 1024);
-            en_type_t* ent1 = g_register_entity_type(ecs, 2048);
+            /*en_type_t* ent0 = */ g_register_entity_type(ecs, 1024);
+            /*en_type_t* ent1 = */ g_register_entity_type(ecs, 2048);
             g_destroy_ecs(ecs);
         }
 
