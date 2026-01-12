@@ -96,8 +96,3 @@ while (!iter.end())
 ## Dependencies
 
 - cbase (for alloc_t and hbb_t)
-
-## Buy me a Coffee
-
-If you like my work and want to support me. Please consider to buy me a [coffee!](https://www.buymeacoffee.com/Jur93n)
-<img src="bmacoffee.png" width="100">

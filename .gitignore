@@ -35,4 +35,6 @@ tags
 !*.ini
 !*.bat
 
+!*.yml
+
 #except the following folders
