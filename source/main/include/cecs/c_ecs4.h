@@ -19,14 +19,17 @@ namespace ncore
         typedef u8  entity_generation_t;
         typedef u32 entity_index_t;
 
-        const u32 ECS_ENTITY_NULL        = (0xFFFFFFFF); // Null entity
-        const u32 ECS_ENTITY_INDEX_MASK  = (0x00FFFFFF); // Mask to use to get the entity index from an entity identifier
-        const u32 ECS_ENTITY_GEN_ID_MASK = (0xFF000000); // Mask to use to get the generation id from an entity identifier
-        const s8  ECS_ENTITY_GEN_SHIFT   = (24);         // Extent of the entity id + type within an identifier
+        const u32 ECS_ENTITY_NULL            = (0xFFFFFFFF); // Null entity
+        const u32 ECS_ENTITY_INDEX_MASK      = (0x0000FFFF); // Mask to use to get the entity index from an entity identifier
+        const u32 ECS_ENTITY_CONTAINER_MASK  = (0x00FF0000); // Mask to use to get the entity container index from an entity identifier
+        const u32 ECS_ENTITY_GEN_ID_MASK     = (0xFF000000); // Mask to use to get the generation id from an entity identifier
+        const s8  ECS_ENTITY_CONTAINER_SHIFT = (16);         // Shift to get the entity container index
+        const s8  ECS_ENTITY_GEN_ID_SHIFT    = (24);         // Shift to get the generation id
 
         inline bool                g_entity_is_null(entity_t e) { return e == ECS_ENTITY_NULL; }
-        inline entity_generation_t g_entity_generation(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_SHIFT; }
+        inline entity_generation_t g_entity_generation(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_ID_SHIFT; }
         inline entity_index_t      g_entity_index(entity_t e) { return (entity_index_t)e & ECS_ENTITY_INDEX_MASK; }
+        inline u32                 g_entity_container_index(entity_t e) { return (((u32)e & ECS_ENTITY_CONTAINER_MASK) >> ECS_ENTITY_CONTAINER_SHIFT); }
 
         struct ecs_t;
 

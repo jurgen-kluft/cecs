@@ -10,13 +10,14 @@ namespace ncore
 {
     namespace necs4
     {
-        // ecs4: based on using entity shards, each shard holds up to 65536 entities, as well as virtual memory.
+        // ecs4: based on using entity shards, each shard holds up to 65536 entities and has component containters.
+        // A shard is purely using virtual memory.
 
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // type definitions and utility functions
-        static inline entity_t s_entity_make(entity_generation_t genid, entity_index_t index) { return ((u32)genid << ECS_ENTITY_GEN_SHIFT) | (index & ECS_ENTITY_INDEX_MASK); }
+        static inline entity_t s_entity_make(entity_generation_t genid, entity_index_t index) { return ((u32)genid << ECS_ENTITY_GEN_ID_SHIFT) | (index & ECS_ENTITY_INDEX_MASK); }
 
         // Use virtual memory address space to place a component container for 65536 entities
         // This struct needs to be
@@ -31,37 +32,56 @@ namespace ncore
         // u16*  m_global_to_local; // 128 cKB, 8 pages of 16 cKB
         // u16*  m_local_to_global; // 128 cKB, 8 pages of 16 cKB
 
-        struct entity_shard_t
+        static u32 sizeof_data_for_one_entity(u32 max_components, u32 max_tags)
         {
-            u32                    m_max_entities;                   // 65536 ?
-            u32                    m_max_component_containers;       // N component containers
-            u32                    m_component_words_per_entity;     // Number of u32 words to hold all component bits per entity
-            u32                    m_tag_words_per_entity;           // Number of u32 words to hold all tags per entity
-            byte*                  m_per_entity_generation;          // Page growing array (4 pages)
-            u32*                   m_per_entity_component_occupancy; // Page growing array
-            u32*                   m_per_entity_tags;                // Page growing array
-            component_container_t* m_component_containers;           // N component containers
-            byte*                  m_component_data;                 // Component data for all components (virtual memory)
-            u16                    m_entity_free_bin0;               // 16 * 64 * 64 = 65536 entities
-            u64*                   m_entity_free_bin1;               // Track the 0 bits in m_entity_alive_bin2
-            u16                    m_entity_alive_bin0;              // 16 * 64 * 64 = 65536 entitiess
-            u64*                   m_entity_alive_bin1;              // Track the 1 bits in m_entity_alive_bin2
-            u64*                   m_entity_alive_bin2;              // A '1' bit indicates that the entity is alive
+            u32 sz = 0;
+            sz += sizeof(byte);                            // generation is 1 byte
+            sz += ((max_components + 7) / 8) * sizeof(u8); // component occupancy bits
+            sz += ((max_tags + 7) / 8) * sizeof(u8);       // tags bits
+            return sz;
+        }
+
+        struct entity_container_t
+        {
+            u32                    m_max_entities;               // 65536 ?
+            u32                    m_max_component_containers;   // N component containers
+            u16                    m_component_words_per_entity; // Number of u32 words to hold all component bits per entity
+            u16                    m_tag_words_per_entity;       // Number of u32 words to hold all tags per entity
+            u16                    m_entity_free_bin0;           // 16 * 64 * 64 = 65536 entities
+            u16                    m_entity_alive_bin0;          // 16 * 64 * 64 = 65536 entitiess
+            byte*                  m_per_entity_data;            // Page growing array (4 pages)
+            component_container_t* m_component_containers;       // N component containers
+            byte*                  m_component_data;             // Component data for all components (virtual memory)
+            u64*                   m_entity_free_bin1;           // Track the 0 bits in m_entity_alive_bin2
+            u64*                   m_entity_alive_bin1;          // Track the 1 bits in m_entity_alive_bin2
+            u64*                   m_entity_alive_bin2;          // A '1' bit indicates that the entity is alive
         };
+
+        entity_container_t* s_entity_container_create(alloc_t* allocator, u32 max_components, u32 max_tags)
+        {
+            // Virtual memory layout:
+            // entity_container_t (32 bytes)
+            // component_container_t (max_components * sizeof(component_container_t))
+            // entity_free_bin1  (1024 bits = 128 bytes)
+            // entity_alive_bin1 (1024 bits = 128 bytes)
+            // entity_alive_bin2 (65536 bits = 8 KB)
+            // per_entity_data (sizeof_data_for_one_entity(max_components, max_tags) * 65536)
+            // component_data
+        }
+
+        static void s_entity_container_teardown(alloc_t* allocator, component_container_t* container)
+        {
+            // Release component data virtual memory
+            // Release container memory
+        }
 
         struct ecs_t
         {
             DCORE_CLASS_PLACEMENT_NEW_DELETE
-            u32             m_max_shards;
-            u32             m_num_shards;
-            entity_shard_t* m_shards;
+            u32                  m_max_containers;
+            u32                  m_num_containers;
+            entity_container_t** m_containers;
         };
 
-        static void s_teardown(alloc_t* allocator, component_container_t* container)
-        {
-            container->m_free_index       = 0;
-            container->m_sizeof_component = 0;
-        }
-
-    } // namespace necs3
+    } // namespace necs4
 } // namespace ncore
