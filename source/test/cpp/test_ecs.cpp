@@ -77,7 +77,7 @@ UNITTEST_SUITE_BEGIN(necs)
             ecs_t* ecs = g_create_ecs(Allocator);
 
             tg_type_t friendly  = {-1, "friendly"};
-            tg_type_t enemy_tag = {-1, "enemy_tag"};
+            //tg_type_t enemy_tag = {-1, "enemy_tag"};
             tg_type_t target    = {-1, "target"};
             tg_type_t dirty     = {-1, "dirty"};
 
