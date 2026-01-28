@@ -12,6 +12,7 @@ namespace ncore
     namespace necs4
     {
         // ecs4: Entity Component System, version 4
+        // Using virtual memory.
 
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
@@ -24,26 +25,25 @@ namespace ncore
         struct ecs_t
         {
             DCORE_CLASS_PLACEMENT_NEW_DELETE
-            u32            m_max_component_containers;         // Maximum number of component containers
-            u32            m_num_component_containers;         // Current number of component containers
-            u32            m_free_component_containers;        // Bit array to track free component containers
-            u8             m_component_bytes_per_entity;       // Number of u32 words to hold all component bits per entit (u8)((max_component_types + 7) / 8);
-            u8             m_tag_bytes_per_entity;             // Number of u32 words to hold all tags per enti(u8)((max_tag_types + 31) / 32);
-            u32            m_entity_free_bin0;                 // 32 * 32 * 32 = 32768 entities
-            u32            m_entity_alive_bin0;                // 32 * 32 * 32 = 32768 entities
-            u32*           m_entity_free_bin1;                 // Track the 0 bits in m_entity_bin2 (32 * sizeof(u32) = 128 bytes)
-            u32*           m_entity_alive_bin1;                // Track the 1 bits in m_entity_bin2 (32 * sizeof(u32) = 128 bytes)
-            u32*           m_entity_free_bin2;                 // '1' bit = alive entity, '0' bit = free entity (32768 bits = 4 KB)
-            u32*           m_entity_alive_bin2;                // '1' bit = alive entity, '0' bit = free entity (32768 bits = 4 KB)
-            u32*           m_entity_bin3;                      // 32 * 32 * 32 * 32 = maximum 1,048,576 entities (growing page array)
-            byte*          m_per_entity_data;                  // Entity[]{generation, component occupancy, tags}, page growing array (4 pages)
-            byte*          m_entity_generation_array;          // Pointer to generation array (page aligned and growing)
-            byte*          m_entity_component_occupancy_array; // Pointer to component occupancy bits array (page aligned and growing)
-            byte*          m_entity_tags_array;                // Pointer to tags bits array (page aligned and growing)
-            components_t** m_components_array;                 // Array of component containers
+            u8            m_max_component_containers;         // Maximum number of component containers
+            u8            m_num_component_containers;         // Current number of component containers
+            u8            m_component_bytes_per_entity;       // Number of u32 words to hold all component bits per entit (u8)((max_component_types + 7) / 8);
+            u8            m_tag_bytes_per_entity;             // Number of u32 words to hold all tags per enti(u8)((max_tag_types + 31) / 32);
+            u32           m_free_component_containers;        // Bits to track free component containers
+            u32           m_entity_free_bin0;                 // 32 * 32 * 32 = 32768 entities
+            u32           m_entity_alive_bin0;                // 32 * 32 * 32 = 32768 entities
+            u32*          m_entity_free_bin1;                 // Track the 0 bits in m_entity_bin2 (32 * sizeof(u32) = 128 bytes)
+            u32*          m_entity_alive_bin1;                // Track the 1 bits in m_entity_bin2 (32 * sizeof(u32) = 128 bytes)
+            u32*          m_entity_free_bin2;                 // '1' bit = alive entity, '0' bit = free entity (32768 bits = 4 KB)
+            u32*          m_entity_alive_bin2;                // '1' bit = alive entity, '0' bit = free entity (32768 bits = 4 KB)
+            u32*          m_entity_bin3;                      // 32 * 32 * 32 * 32 = maximum 1,048,576 entities (growing)
+            byte*         m_per_entity_data;                  // Entity[]{generation, component occupancy, tags} (growing)
+            byte*         m_entity_generation_array;          // Pointer to generation array (page aligned and growing)
+            byte*         m_entity_component_occupancy_array; // Pointer to component occupancy bits array (page aligned and growing)
+            byte*         m_entity_tags_array;                // Pointer to tags bits array (page aligned and growing)
+            components_t* m_components_array[32];             // Array of component containers
         };
         // ecs_t is followed in memory by:
-        // components_t*        m_entity_containers[m_max_entity_containers];
         // u32                  m_entity_free_bin1[1024 / 32];             // 1024 bits = 128 bytes
         // u32                  m_entity_alive_bin1[1024 / 32];            // 1024 bits = 128 bytes
         // u32                  m_entity_free_bin2[32768 / 32];            // 32768 bits = 4 KB
@@ -57,8 +57,8 @@ namespace ncore
 
         struct component_type_t
         {
-            u16 m_num_components;   //
-            u16 m_sizeof_component; //
+            u16 m_num_components;   // number of components allocated
+            u16 m_sizeof_component; // size of a single component
             u32 m_page_offset;      // offset in pages from the start of component data
         };
 
@@ -80,18 +80,16 @@ namespace ncore
         // {page aligned}       component data virtual memory
         // --------------------------------------------------------------------------------------------------------
 
-        static u16* get_global_to_local(byte* base, u8 page_size_shift, component_type_t* container) { return (u16*)(base + ((container->m_page_offset + 0) << page_size_shift)); }
-        static u16* get_local_to_global(byte* base, u8 page_size_shift, component_type_t* container)
+        static inline component_type_t* get_component_type_array(components_t* container) { return (component_type_t*)((byte*)container + sizeof(components_t)); }
+        static byte*                    get_component_base(components_t* container, u8 page_size_shift, u32 component_type_index)
         {
-            const u32 array_num_pages = (64 * cKB) >> page_size_shift;
-            return (u16*)(base + ((container->m_page_offset + array_num_pages) << page_size_shift));
+            const component_type_t* comp_type_array = get_component_type_array(container);
+            const component_type_t& comp_type       = comp_type_array[component_type_index];
+            return container->m_component_data + ((int_t)comp_type.m_page_offset << page_size_shift);
         }
-        static component_type_t* get_component_type_array(components_t* container) { return (component_type_t*)((byte*)container + sizeof(components_t)); }
-        static byte*             get_component_data(byte* base, u8 page_size_shift, component_type_t* container)
-        {
-            const u32 array_num_pages = (64 * cKB) >> page_size_shift;
-            return (base + ((container->m_page_offset + (array_num_pages * 2)) << page_size_shift));
-        }
+        static inline u16* get_global_to_local(byte* comp_base) { return (u16*)(comp_base); }
+        static inline u16* get_local_to_global(byte* comp_base) { return (u16*)(comp_base + (64 * cKB)); }
+        static byte*       get_component_data(byte* comp_base) { return comp_base + (128 * cKB); }
 
         static bool allocate_component_type(components_t* container, u16 component_type_index, u32 max_component, u32 sizeof_component)
         {
@@ -119,7 +117,7 @@ namespace ncore
             return true;
         }
 
-        static byte* allocate_component(components_t* container, u16 entity_index, u16 component_type_index)
+        static byte* alloc_component(components_t* container, u16 entity_index, u16 component_type_index)
         {
             const u8  page_size_shift = v_alloc_get_page_size_shift();
             const u32 page_size       = (1 << page_size_shift);
@@ -129,10 +127,11 @@ namespace ncore
             ASSERT(comp_type.m_num_components < D_ECS4_MAX_ENTITIES_PER_CONTAINER);
             ASSERT(comp_type.m_sizeof_component > 0);
 
-            byte* base = container->m_component_data;
+            byte* base      = container->m_component_data;
+            byte* comp_base = get_component_base(container, page_size_shift, component_type_index);
 
-            u16* global_to_local = get_global_to_local(base, page_size_shift, &comp_type);
-            u16* local_to_global = get_local_to_global(base, page_size_shift, &comp_type);
+            u16* global_to_local = get_global_to_local(comp_base);
+            u16* local_to_global = get_local_to_global(comp_base);
 
             // allocate local index
             u16 local_index               = comp_type.m_num_components;
@@ -140,10 +139,12 @@ namespace ncore
             local_to_global[local_index]  = entity_index;
 
             comp_type.m_num_components++;
-            return get_component_data(base, page_size_shift, &comp_type) + (local_index * comp_type.m_sizeof_component);
+
+            byte* comp_data = get_component_data(comp_base);
+            return comp_data + (local_index * comp_type.m_sizeof_component);
         }
 
-        static byte* get_component(components_t* container, u16 entity_index, u16 component_type_index)
+        static void free_component(components_t* container, u16 entity_index, u16 component_type_index)
         {
             const u8  page_size_shift = v_alloc_get_page_size_shift();
             const u32 page_size       = (1 << page_size_shift);
@@ -151,36 +152,75 @@ namespace ncore
             component_type_t* comp_type_array = get_component_type_array(container);
             component_type_t& comp_type       = comp_type_array[component_type_index];
 
-            byte* base = container->m_component_data;
+            byte* base            = container->m_component_data;
+            byte* comp_base       = get_component_base(container, page_size_shift, component_type_index);
+            u16*  global_to_local = get_global_to_local(comp_base);
+            u16*  local_to_global = get_local_to_global(comp_base);
 
-            const u16* global_to_local = get_global_to_local(base, page_size_shift, &comp_type);
-            const u16  local_index     = global_to_local[entity_index];
-            return get_component_data(base, page_size_shift, &comp_type) + (local_index * comp_type.m_sizeof_component);
+            const u16 local_index = global_to_local[entity_index];
+            const u16 last_index  = comp_type.m_num_components - 1;
+
+            if (local_index != last_index)
+            {
+                // move last component to freed spot
+                byte* comp_data       = get_component_data(comp_base);
+                byte* dest_comp_ptr   = comp_data + (local_index * comp_type.m_sizeof_component);
+                byte* source_comp_ptr = comp_data + (last_index * comp_type.m_sizeof_component);
+                g_memcpy(dest_comp_ptr, source_comp_ptr, comp_type.m_sizeof_component);
+
+                // update moved component's indices
+                const u16 moved_entity_index        = local_to_global[last_index];
+                global_to_local[moved_entity_index] = local_index;
+                local_to_global[local_index]        = moved_entity_index;
+            }
+
+            // clear last component's indices
+            global_to_local[entity_index] = 0xFFFF;
+            local_to_global[last_index]   = 0xFFFF;
+
+            comp_type.m_num_components--;
         }
 
-        // With 256 components and an average size of 32 bytes per component, this gives us:
-        // Component data: 32768 * 32 = 1 MB per component, for 256 components = 256 MB
-        // Global to local: 256 * 128 KB = 32 MB
-        // Local to global: 256 * 128 KB = 32 MB
-        // Total: 320 MB
+        static byte* get_component(components_t* container, u16 component_type_index, u16 entity_index)
+        {
+            const u8 page_size_shift = v_alloc_get_page_size_shift();
+
+            const component_type_t* comp_type_array = get_component_type_array(container);
+            const component_type_t& comp_type       = comp_type_array[component_type_index];
+
+            byte*      base            = container->m_component_data;
+            byte*      comp_base       = get_component_base(container, page_size_shift, component_type_index);
+            const u16* global_to_local = get_global_to_local(comp_base);
+
+            const u16 local_index = global_to_local[entity_index];
+            return get_component_data(comp_base) + (local_index * comp_type.m_sizeof_component);
+        }
+
+        // Example calculation of memory usage:
+        //    With 256 components and an average size of 32 bytes per component, this gives us:
+        //    Component data: 32 KiB * 32 = 1 MB per component, for 256 components = 256 MB
+        //    Global to local: 256 * 128 KB = 32 MB
+        //    Local to global: 256 * 128 KB = 32 MB
+        //    Total: 320 MB
 
         static components_t* s_components_create(u32 max_component_types, u32 average_component_count, u32 average_component_size)
         {
             const u8  page_size_shift = v_alloc_get_page_size_shift();
             const u32 page_size       = (1 << page_size_shift);
 
-            const u32 component_data_size = ((average_component_count * average_component_size) + (page_size - 1)) & ~(page_size - 1);
+            // compute an estimated size of component data needed
+            const u32 component_data_size = ((2 * 64 * cKB) + (average_component_count * average_component_size) + (page_size - 1)) & ~(page_size - 1);
 
-            int_t address_space_size = sizeof(components_t);
-            address_space_size += max_component_types * sizeof(component_type_t);
-            address_space_size += ((64 * cKB) + (64 * cKB)); // global to local + local to global
+            int_t base_size = sizeof(components_t);
+            base_size       = base_size + max_component_types * sizeof(component_type_t);
+            base_size       = (base_size + (page_size - 1)) & ~(page_size - 1); // align to page size
 
-            // reserve virtual address space
-            void* base = v_alloc_reserve(address_space_size + (component_data_size * max_component_types));
+            // reserve virtual address space for base size + component data
+            void* base = v_alloc_reserve(base_size + (component_data_size * max_component_types));
             if (base == nullptr)
                 return nullptr;
 
-            // commit first page containing components_t and component_type_t array
+            // commit first page containing struct components_t and array component_type_t[]
             v_alloc_commit(base, page_size);
 
             components_t* container = (components_t*)base;
@@ -188,14 +228,16 @@ namespace ncore
 
             container->m_used_pages     = 0;
             container->m_max_pages      = (component_data_size * max_component_types) >> page_size_shift;
-            container->m_component_data = (byte*)base + address_space_size;
+            container->m_component_data = (byte*)base + base_size;
 
             return container;
         }
 
         static void s_components_teardown(components_t* container)
         {
-            // todo
+            const u8    page_size_shift = v_alloc_get_page_size_shift();
+            const int_t size            = (container->m_component_data - (byte*)container) + ((container->m_max_pages) << page_size_shift);
+            v_alloc_release(container, size);
         }
 
         ecs_t* g_create_ecs(u32 max_component_types, u32 max_tag_types)
@@ -213,7 +255,6 @@ namespace ncore
             int_t tags_array_offset                = -1;
 
             int_t mem_size                   = sizeof(components_t);
-            mem_size                         = mem_size + (32 * sizeof(components_t*));                                        // m_component_containers
             free_bin1_offset                 = mem_size;                                                                       // record offset of free_bin1
             mem_size                         = mem_size + ((32 * 32) / 8);                                                     // free_bin1
             alive_bin1_offset                = mem_size;                                                                       // record offset of alive_bin1
@@ -257,7 +298,6 @@ namespace ncore
             ecs->m_entity_generation_array          = (byte*)ecs + generation_array_offset;
             ecs->m_entity_component_occupancy_array = (byte*)ecs + component_occupancy_array_offset;
             ecs->m_entity_tags_array                = (byte*)ecs + tags_array_offset;
-            ecs->m_components_array                 = (components_t**)((byte*)ecs + sizeof(ecs_t));
 
             return ecs;
         }
