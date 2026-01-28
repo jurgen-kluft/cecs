@@ -15,7 +15,7 @@ namespace ncore
     {
         // ECS Version 4, an Entity-Component-System (ECS) implementation.
 
-        typedef u32 entity_t;
+        typedef u32 entity_t; // Entity identifier {generation(8) + container-index(8) + index(16)}
         typedef u8  entity_generation_t;
         typedef u32 entity_index_t;
 
@@ -45,7 +45,7 @@ namespace ncore
     }
 
         // Create and Destroy ECS
-        ecs_t* g_create_ecs(u32 max_component_types, u32 max_tag_types);
+        ecs_t* g_create_ecs(u32 max_entities = 32768, u32 max_component_types = 64, u32 max_tag_types = 16, u32 average_component_count = 16384, u32 average_component_size = 32);
         void   g_destroy_ecs(ecs_t* ecs);
 
         // Create and Destroy Entity
@@ -54,9 +54,7 @@ namespace ncore
 
         // Components
         bool                       g_register_component(ecs_t* ecs, u32 cp_index, s32 cp_sizeof, s32 cp_alignof = 8);
-        void                       g_unregister_component(ecs_t* ecs, u32 cp_index);
         template <typename T> bool g_register_component(ecs_t* ecs) { return g_register_component(ecs, T::ECS4_COMPONENT_INDEX, sizeof(T), alignof(T)); }
-        template <typename T> void g_unregister_component(ecs_t* ecs) { g_unregister_component(ecs, T::ECS4_COMPONENT_INDEX); }
 
         bool  g_has_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
         void* g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
