@@ -2,6 +2,7 @@
 #include "ccore/c_allocator.h"
 #include "ccore/c_arena.h"
 #include "ccore/c_debug.h"
+#include "ccore/c_duomap1.h"
 #include "ccore/c_memory.h"
 #include "cbase/c_integer.h"
 
@@ -30,6 +31,8 @@ namespace ncore
             u8                      m_component_bytes_per_entity;       // Number of u32 words to hold all component bits per entit (u8)((max_component_types + 7) / 8);
             u8                      m_tag_bytes_per_entity;             // Number of u32 words to hold all tags per enti(u8)((max_tag_types + 31) / 32);
             u32                     m_free_component_containers;        // Bits to track free component containers
+            u32                     m_entity_free_index;                // First free entity index
+            u32                     m_entity_alive_count;               // Number of alive entities
             u32                     m_entity_free_bin0;                 // 32 * 32 * 32 = 32768 entities
             u32                     m_entity_alive_bin0;                // 32 * 32 * 32 = 32768 entities
             u32*                    m_entity_free_bin1;                 // Track the 0 bits in m_entity_bin2 (32 * sizeof(u32) = 128 bytes)
@@ -37,7 +40,6 @@ namespace ncore
             u32*                    m_entity_free_bin2;                 // '1' bit = alive entity, '0' bit = free entity (32768 bits = 4 KB)
             u32*                    m_entity_alive_bin2;                // '1' bit = alive entity, '0' bit = free entity (32768 bits = 4 KB)
             u32*                    m_entity_bin3;                      // 32 * 32 * 32 * 32 = maximum 1,048,576 entities (growing)
-            byte*                   m_per_entity_data;                  // Entity[]{generation, component occupancy, tags} (growing)
             byte*                   m_entity_generation_array;          // Pointer to generation array (page aligned and growing)
             byte*                   m_entity_component_occupancy_array; // Pointer to component occupancy bits array (page aligned and growing)
             byte*                   m_entity_tags_array;                // Pointer to tags bits array (page aligned and growing)
@@ -315,12 +317,29 @@ namespace ncore
             ecs->m_entity_free_bin2                 = (u32*)((byte*)ecs + free_bin2_offset);
             ecs->m_entity_alive_bin2                = (u32*)((byte*)ecs + alive_bin2_offset);
             ecs->m_entity_bin3                      = (u32*)((byte*)ecs + bin3_offset);
-            ecs->m_per_entity_data                  = (byte*)ecs + tags_array_offset;
             ecs->m_entity_generation_array          = (byte*)ecs + generation_array_offset;
             ecs->m_entity_component_occupancy_array = (byte*)ecs + component_occupancy_array_offset;
             ecs->m_entity_tags_array                = (byte*)ecs + tags_array_offset;
 
             return ecs;
+        }
+
+        static entity_t s_create_entity(ecs_t* ecs)
+        {
+            // check if we need to grow:
+            // - bin3
+            // - entity tags array
+            // - entity generation array
+            // - entity component occupancy array
+            // - adding a components container if needed
+
+            if (ecs->m_entity_alive_count < ecs->m_entity_free_index)
+            {
+                // The hierarchical bitmaps can be used to find a free entity index
+                const s32 bit = nduomap20::find0_and_set(&ecs->m_entity_free_bin0, ecs->m_entity_free_bin1, ecs->m_entity_free_bin2, &ecs->m_entity_alive_bin0, ecs->m_entity_alive_bin1, ecs->m_entity_alive_bin2, ecs->m_entity_bin3, ecs->m_entity_free_index);
+            }
+
+            return 0;
         }
 
         void g_destroy_ecs(ecs_t* ecs)
