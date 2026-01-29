@@ -204,24 +204,24 @@ namespace ncore
         //    Global to local: 256 * 128 KB = 32 MB
         //    Local to global: 256 * 128 KB = 32 MB
         //    Total: 320 MB
-        static inline int_t s_align_to_page_size(u32 page_size, int_t size) { return (size + (page_size - 1)) & ~(page_size - 1); }
+        static inline int_t s_align_to(u32 page_size, int_t size) { return (size + (page_size - 1)) & ~(page_size - 1); }
 
         // A single component container size calculation, such a component container holds data for a single component type and
         // exists within a larger components_container_t which holds multiple component containers.
         static inline int_t s_component_container_calc_size(u32 page_size, u32 average_component_count, u32 average_component_size)
         {
             const int_t sizeof_component_data = (average_component_count * average_component_size);
-            return (64 * cKB) + (64 * cKB) + s_align_to_page_size(page_size, sizeof_component_data);
+            return (64 * cKB) + (64 * cKB) + s_align_to(page_size, sizeof_component_data);
         }
 
         // Calculate the size of a components_container_t including the array of component containers and the component data virtual memory.
         static inline int_t s_components_container_calc_size(u32 page_size, u32 max_component_types, u32 average_component_count, u32 average_component_size)
         {
-            const int_t sizeof_components_container = s_align_to_page_size(page_size, sizeof(components_container_t) + (max_component_types * sizeof(component_container_t)));
+            const int_t sizeof_components_container = s_align_to(page_size, sizeof(components_container_t) + (max_component_types * sizeof(component_container_t)));
             const int_t sizeof_component_type       = s_component_container_calc_size(page_size, average_component_count, average_component_size);
             return sizeof_components_container + (max_component_types * sizeof_component_type);
         }
-        static inline int_t s_components_container_base_size(u32 page_size, u32 max_component_types) { return s_align_to_page_size(page_size, sizeof(components_container_t) + (max_component_types * sizeof(component_container_t))); }
+        static inline int_t s_components_container_base_size(u32 page_size, u32 max_component_types) { return s_align_to(page_size, sizeof(components_container_t) + (max_component_types * sizeof(component_container_t))); }
 
         static components_container_t* s_components_create(u32 max_component_types, u32 average_component_count, u32 average_component_size)
         {
@@ -272,26 +272,26 @@ namespace ncore
             int_t tags_array_offset                = -1;
 
             int_t mem_size                   = sizeof(components_container_t);
-            free_bin1_offset                 = mem_size;                                                                       // record offset of free_bin1
-            mem_size                         = mem_size + ((32 * 32) / 8);                                                     // free_bin1
-            alive_bin1_offset                = mem_size;                                                                       // record offset of alive_bin1
-            mem_size                         = mem_size + ((32 * 32) / 8);                                                     // alive_bin1
-            free_bin2_offset                 = mem_size;                                                                       // record offset of free_bin2
-            mem_size                         = mem_size + ((32 * 32 * 32) / 8);                                                // free_bin2
-            alive_bin2_offset                = mem_size;                                                                       // record offset of alive_bin2
-            mem_size                         = mem_size + ((32 * 32 * 32) / 8);                                                // alive_bin2
-            bin3_offset                      = mem_size;                                                                       // record offset of bin3
-            mem_size                         = mem_size + ((32 * 32 * 32 * 32) / 8);                                           // bin3
-            mem_size                         = ((mem_size + (page_size - 1)) & ~(page_size - 1));                              // align to page size
-            generation_array_offset          = mem_size;                                                                       // record offset of generation_array
-            mem_size                         = mem_size + (1 * cMB);                                                           // entity_generation_array
-            mem_size                         = ((mem_size + (page_size - 1)) & ~(page_size - 1));                              // align to page size
-            component_occupancy_array_offset = mem_size;                                                                       // record offset of component_occupancy_array
-            mem_size                         = mem_size + ((max_component_types + 7) / 8) * D_ECS4_MAX_ENTITIES_PER_CONTAINER; // entity_component_occupancy_array
-            mem_size                         = ((mem_size + (page_size - 1)) & ~(page_size - 1));                              // align to page size
-            tags_array_offset                = mem_size;                                                                       // record offset of tags_array
-            mem_size                         = mem_size + ((max_tag_types + 7) / 8) * D_ECS4_MAX_ENTITIES_PER_CONTAINER;       // entity_tags_array
-            mem_size                         = ((mem_size + (page_size - 1)) & ~(page_size - 1));                              // align to page size
+            free_bin1_offset                 = mem_size;                                                     // record offset of free_bin1
+            mem_size                         = mem_size + ((32 * 32) / 8);                                   // free_bin1
+            alive_bin1_offset                = mem_size;                                                     // record offset of alive_bin1
+            mem_size                         = mem_size + ((32 * 32) / 8);                                   // alive_bin1
+            free_bin2_offset                 = mem_size;                                                     // record offset of free_bin2
+            mem_size                         = mem_size + ((32 * 32 * 32) / 8);                              // free_bin2
+            alive_bin2_offset                = mem_size;                                                     // record offset of alive_bin2
+            mem_size                         = mem_size + ((32 * 32 * 32) / 8);                              // alive_bin2
+            bin3_offset                      = mem_size;                                                     // record offset of bin3
+            mem_size                         = mem_size + ((32 * 32 * 32 * 32) / 8);                         // bin3
+            mem_size                         = s_align_to(page_size, mem_size);                              // align to page size
+            generation_array_offset          = mem_size;                                                     // record offset of generation_array
+            mem_size                         = mem_size + (1 * cMB);                                         // entity_generation_array
+            mem_size                         = s_align_to(page_size, mem_size);                              // align to page size
+            component_occupancy_array_offset = mem_size;                                                     // record offset of component_occupancy_array
+            mem_size                         = mem_size + max_entities * s_align_to(8, max_component_types); // entity_component_occupancy_array
+            mem_size                         = s_align_to(page_size, mem_size);                              // align to page size
+            tags_array_offset                = mem_size;                                                     // record offset of tags_array
+            mem_size                         = mem_size + max_entities * s_align_to(8, max_tag_types);       // entity_tags_array
+            mem_size                         = s_align_to(page_size, mem_size);                              // align to page size
 
             const int_t max_components_containers = (max_entities + (D_ECS4_MAX_ENTITIES_PER_CONTAINER - 1)) / D_ECS4_MAX_ENTITIES_PER_CONTAINER;
 
