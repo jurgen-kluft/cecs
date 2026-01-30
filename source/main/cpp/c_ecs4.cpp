@@ -1,6 +1,7 @@
 #include "ccore/c_target.h"
 #include "ccore/c_allocator.h"
 #include "ccore/c_arena.h"
+#include "ccore/c_bin.h"
 #include "ccore/c_debug.h"
 #include "ccore/c_duomap1.h"
 #include "ccore/c_memory.h"
@@ -13,7 +14,23 @@ namespace ncore
     namespace necs4
     {
         // ecs4: Entity Component System, version 4
-        // Using virtual memory.
+        // Using virtual memory
+        // Note: Using bin_t from ccore, each bin being a component container
+        // Note: For ensuring contiguous memory usage of a bin, we can introduce an additional function that
+        //       the user can call that will defragment or compact the memory within each bin. We could give
+        //       some parameters for the user to control the defragmentation process and performance timing.
+        //       Steps
+        //        - For each component bin, find last empty, remember this index
+        //        - Iterate over all entities
+        //          - For each entity iterate over its component, check the index against the 'empty index',
+        //            if higher than swap them.
+
+        // Occupancy:
+        // - Total maximum component types = 256
+        // - Per entity maximum components = 64
+        // Entity component occupancy works as follows:
+        // - u64[4], 256 bits, each bit indicating if the component is registered for this entity
+        // - u32[64], each u32 is a [u8 (component type), u24(index in component bin)]
 
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
@@ -27,37 +44,35 @@ namespace ncore
         struct ecs_t
         {
             DCORE_CLASS_PLACEMENT_NEW_DELETE
-            u8                 m_max_component_containers;          // Maximum number of component containers
-            u8                 m_num_component_containers;          // Current number of component containers
-            u8                 m_component_bytes_per_entity;        // Number of u32 words to hold all component bits per entit (u8)((max_component_types + 7) / 8);
-            u8                 m_tag_bytes_per_entity;              // Number of u32 words to hold all tags per enti(u8)((max_tag_types + 31) / 32);
-            u32                m_free_component_containers;         // Bits to track free component containers
-            component_type_t*  m_component_type_array;              // Array of component types
-            component_shard_t* m_component_shard_array[32];         // Array of component shards
-            u8                 m_base_cur_pages;                    // Current number of pages allocated for ecs base data
-            u8                 m_base_max_pages;                    // Maximum number of pages reserved for ecs base data
-            u8                 m_generation_array_cur_pages;        // Current number of pages allocated for entity generation array
-            u8                 m_generation_array_max_pages;        // Maximum number of pages reserved for entity generation array
-            u8                 m_occupancy_array_cur_pages;         // Current number of pages allocated for entity component occupancy array
-            u8                 m_occupancy_array_max_pages;         // Maximum number of pages reserved for entity component occupancy array
-            u8                 m_tags_array_cur_pages;              // Current number of pages allocated for entity tags array
-            u8                 m_tags_array_max_pages;              // Maximum number of pages reserved for entity tags array
-            u32                m_entity_bin3_max_index;             // When entity index reaches this, we need to grow it
-            u32                m_entity_generation_array_max_index; // When entity index reaches this, we need to grow it
-            u32                m_entity_occupancy_array_max_index;  // When entity index reaches this, we need to grow it
-            u32                m_entity_tags_array_max_index;       // When entity index reaches this, we need to grow it
-            u32                m_entity_free_index;                 // First free entity index
-            u32                m_entity_alive_count;                // Number of alive entities
-            u32                m_entity_free_bin0;                  // 32 * 32 * 32 = 32768 entities
-            u32                m_entity_alive_bin0;                 // 32 * 32 * 32 = 32768 entities
-            u32*               m_entity_free_bin1;                  // Track the 0 bits in m_entity_bin2 (32 * sizeof(u32) = 128 bytes)
-            u32*               m_entity_alive_bin1;                 // Track the 1 bits in m_entity_bin2 (32 * sizeof(u32) = 128 bytes)
-            u32*               m_entity_free_bin2;                  // '1' bit = alive entity, '0' bit = free entity (32768 bits = 4 KB)
-            u32*               m_entity_alive_bin2;                 // '1' bit = alive entity, '0' bit = free entity (32768 bits = 4 KB)
-            u32*               m_entity_bin3;                       // 32 * 32 * 32 * 32 = maximum 1,048,576 entities (growing)
-            byte*              m_entity_generation_array;           // Pointer to generation array (page aligned and growing)
-            byte*              m_entity_component_occupancy_array;  // Pointer to component occupancy bits array (page aligned and growing)
-            byte*              m_entity_tags_array;                 // Pointer to tags bits array (page aligned and growing)
+            u8    m_max_component_bins;                // Maximum number of component containers
+            u8    m_num_component_bins;                // Current number of component containers
+            u8    m_tag_bytes_per_entity;              // Number of bytes for tags per entity
+            u8    m_components_per_entity;             // Per entity, how many components can we have (max 250)
+            u8    m_base_cur_pages;                    // Current number of pages allocated for ecs base data
+            u8    m_base_max_pages;                    // Maximum number of pages reserved for ecs base data
+            u8    m_generation_array_cur_pages;        // Current number of pages allocated for entity generation array
+            u8    m_generation_array_max_pages;        // Maximum number of pages reserved for entity generation array
+            u8    m_occupancy_array_cur_pages;         // Current number of pages allocated for entity component occupancy array
+            u8    m_occupancy_array_max_pages;         // Maximum number of pages reserved for entity component occupancy array
+            u8    m_tags_array_cur_pages;              // Current number of pages allocated for entity tags array
+            u8    m_tags_array_max_pages;              // Maximum number of pages reserved for entity tags array
+            u32   m_entity_bin3_max_index;             // When entity index reaches this, we need to grow it
+            u32   m_entity_generation_array_max_index; // When entity index reaches this, we need to grow it
+            u32   m_entity_occupancy_array_max_index;  // When entity index reaches this, we need to grow it
+            u32   m_entity_tags_array_max_index;       // When entity index reaches this, we need to grow it
+            u32   m_entity_free_index;                 // First free entity index
+            u32   m_entity_alive_count;                // Number of alive entities
+            u32   m_entity_free_bin0;                  // 32 * 32 * 32 = 32768 entities
+            u32   m_entity_alive_bin0;                 // 32 * 32 * 32 = 32768 entities
+            u32*  m_entity_free_bin1;                  // Track the 0 bits in m_entity_bin2 (32 * sizeof(u32) = 128 bytes)
+            u32*  m_entity_alive_bin1;                 // Track the 1 bits in m_entity_bin2 (32 * sizeof(u32) = 128 bytes)
+            u32*  m_entity_free_bin2;                  // '1' bit = alive entity, '0' bit = free entity (32768 bits = 4 KB)
+            u32*  m_entity_alive_bin2;                 // '1' bit = alive entity, '0' bit = free entity (32768 bits = 4 KB)
+            u32*  m_entity_bin3;                       // 32 * 32 * 32 * 32 = maximum 1,048,576 entities (growing)
+            byte* m_entity_generation_array;           // Pointer to generation array (page aligned and growing)
+            byte* m_entity_component_occupancy_array;  // Pointer to component occupancy bits array (page aligned and growing)
+            u32*  m_entity_component_reference_array;  // Pointer to component reference array (page aligned and growing)
+            byte* m_entity_tags_array;                 // Pointer to tags bits array (page aligned and growing)
         };
         // ecs_t is followed in memory by:
         // component_shard_t                    m_component_shards[m_max_components];      // Array of component shards
@@ -341,7 +356,7 @@ namespace ncore
             g_memclr(base, (int_t)pages_to_commit << page_size_shift);
 
             ecs_t* ecs                              = (ecs_t*)base;
-            ecs->m_max_component_containers         = (u8)max_components_containers;
+            ecs->m_max_component_bins               = (u8)max_components_containers;
             ecs->m_component_bytes_per_entity       = (u8)((max_component_types + 7) / 8);
             ecs->m_tag_bytes_per_entity             = (u8)((max_tag_types + 7) / 8);
             ecs->m_entity_free_bin1                 = (u32*)((byte*)ecs + free_bin1_offset);
@@ -395,9 +410,9 @@ namespace ncore
             if (entity_index & (D_ECS4_MAX_ENTITIES_PER_CONTAINER - 1))
             {
                 // need to add a new components container
-                ASSERT(ecs->m_num_component_containers < ecs->m_max_component_containers);
-                component_shard_t* current         = ecs->m_components_array[ecs->m_num_component_containers];
-                const u32          container_index = ecs->m_num_component_containers++;
+                ASSERT(ecs->m_num_component_bins < ecs->m_max_component_bins);
+                component_shard_t* current         = ecs->m_components_array[ecs->m_num_component_bins];
+                const u32          container_index = ecs->m_num_component_bins++;
                 component_shard_t* container       = s_components_create(256, 128, 32); // hardcoded for now
                 ASSERT(container != nullptr);
                 ecs->m_components_array[container_index] = container;

@@ -11,39 +11,6 @@ namespace ncore
 {
     namespace necs3
     {
-        // Notes on memory reduction by introducing indirection:
-        //
-        // 2 indirection arrays per entity and limiting entity to have a max of 256 components
-        //
-        // u32:
-        //
-        // 2048 max component types
-        //
-        // entity has a max of 256 components
-        // 2048 * sizeof(byte) + 256 * 4 = 3072 bytes per entity
-        //
-        // If we naively use an indirection array per component, that would take:
-        // 2048 * 4 = 8192 bytes per entity
-        //
-        // u16:
-        //
-        // 2048 max component types
-        //
-        // entity has a max of 256 components
-        // 2048 * sizeof(byte) + 256 * 2 = 2560 bytes per entity
-        //
-        // If we naively use an indirection array per component, that would take:
-        // 2048 * 2 = 4096 bytes per entity
-        //
-        //
-        // Observation:
-        //
-        // If we limit each component container to hold a maximum of 65536 components, we can use u16 for
-        // indirection array. This would reduce the memory footprint of each entity to 4096 bytes when
-        // the maximum number of components is 2048.
-
-        // --------------------------------------------------------------------------------------------------------
-        // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // type definitions and utility functions
         static inline entity_t s_entity_make(entity_generation_t genid, entity_index_t index) { return ((u32)genid << ECS_ENTITY_GEN_SHIFT) | (index & ECS_ENTITY_INDEX_MASK); }
@@ -63,7 +30,7 @@ namespace ncore
             DCORE_CLASS_PLACEMENT_NEW_DELETE
             alloc_t*               m_allocator;
             u32                    m_max_entities;
-            u32                    m_max_components;
+            u32                    m_max_component_types;
             u32                    m_component_words_per_entity;
             u32                    m_tag_words_per_entity;
             byte*                  m_per_entity_generation;
@@ -83,21 +50,21 @@ namespace ncore
             container->m_name             = "";
         }
 
-        ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities, u32 max_components, u32 max_tags)
+        ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities, u32 max_component_types, u32 max_tags)
         {
             ecs_t* ecs = g_construct<ecs_t>(allocator);
 
             ecs->m_allocator                  = allocator;
             ecs->m_max_entities               = max_entities;
-            ecs->m_max_components             = max_components;
-            ecs->m_component_words_per_entity = (max_components + 31) >> 5;
+            ecs->m_max_component_types        = max_component_types;
+            ecs->m_component_words_per_entity = (max_component_types + 31) >> 5;
             ecs->m_tag_words_per_entity       = (max_tags + 31) >> 5;
 
             ecs->m_per_entity_generation          = g_allocate_array_and_memset<byte>(allocator, max_entities, 0);
             ecs->m_per_entity_component_occupancy = g_allocate_array_and_memset<u32>(allocator, max_entities * ecs->m_component_words_per_entity, 0);
             ecs->m_per_entity_tags                = g_allocate_array_and_memset<u32>(allocator, max_entities * ecs->m_tag_words_per_entity, 0);
 
-            ecs->m_component_containers = g_allocate_array_and_memset<component_container_t>(allocator, max_components, 0);
+            ecs->m_component_containers = g_allocate_array_and_memset<component_container_t>(allocator, max_component_types, 0);
 
             duomap_t::config_t cfg = duomap_t::config_t::compute(max_entities);
             ecs->m_entity_state.init_all_free(cfg, allocator);
@@ -109,17 +76,13 @@ namespace ncore
         {
             alloc_t* allocator = ecs->m_allocator;
 
-            for (u32 i = 0; i < ecs->m_max_components; ++i)
+            for (u32 i = 0; i < ecs->m_max_component_types; ++i)
             {
                 component_container_t* container = &ecs->m_component_containers[i];
                 if (container->m_sizeof_component > 0)
                     s_teardown(allocator, container);
             }
 
-            // allocator->deallocate(ecs->m_component_containers);
-            // allocator->deallocate(ecs->m_per_entity_tags);
-            // allocator->deallocate(ecs->m_per_entity_component_occupancy);
-            // allocator->deallocate(ecs->m_per_entity_generation);
             g_deallocate_array(allocator, ecs->m_component_containers);
             g_deallocate_array(allocator, ecs->m_per_entity_tags);
             g_deallocate_array(allocator, ecs->m_per_entity_component_occupancy);
@@ -127,7 +90,7 @@ namespace ncore
 
             ecs->m_entity_state.release(allocator);
 
-            allocator->deallocate(ecs);
+            g_deallocate(allocator, ecs);
         }
 
         entity_t g_create_entity(ecs_t* ecs)
@@ -191,7 +154,7 @@ namespace ncore
 
         void* g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            if (cp_index >= ecs->m_max_components)
+            if (cp_index >= ecs->m_max_component_types)
                 return nullptr;
 
             component_container_t* container = &ecs->m_component_containers[cp_index];
@@ -247,7 +210,7 @@ namespace ncore
 
         void* g_get_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            if (cp_index >= ecs->m_max_components)
+            if (cp_index >= ecs->m_max_component_types)
                 return nullptr;
 
             component_container_t* container = &ecs->m_component_containers[cp_index];
@@ -262,7 +225,7 @@ namespace ncore
 
         bool g_has_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
-            if (tg_index >= ecs->m_max_components)
+            if (tg_index >= ecs->m_max_component_types)
                 return false;
 
             u32 const* tag_occupancy = &ecs->m_per_entity_tags[g_entity_index(entity) * ecs->m_tag_words_per_entity];
@@ -271,7 +234,7 @@ namespace ncore
 
         void g_add_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
-            if (tg_index >= ecs->m_max_components)
+            if (tg_index >= ecs->m_max_component_types)
                 return;
 
             u32* tag_occupancy = &ecs->m_per_entity_tags[g_entity_index(entity) * ecs->m_tag_words_per_entity];
@@ -280,7 +243,7 @@ namespace ncore
 
         void g_rem_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
-            if (tg_index >= ecs->m_max_components)
+            if (tg_index >= ecs->m_max_component_types)
                 return;
 
             u32* tag_occupancy = &ecs->m_per_entity_tags[g_entity_index(entity) * ecs->m_tag_words_per_entity];
