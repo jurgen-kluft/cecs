@@ -36,12 +36,17 @@ namespace ncore
         //        - How many components to move each call (remembering the last entity index that was processed)
         //        - How many entities to iterate
 
-        // Occupancy (example):
-        // - Total maximum component types = 1024
-        // - Per entity maximum components = 64
-        // Entity component occupancy works as follows:
-        // - u64[16], 1024 bits, each bit indicating if the component is registered for this entity
-        // - u32[64], each u32 is a [u10 (component type), u22(index in component bin)]
+        // Occupancy:
+        // What if we have a binmap per component type, where each entity (index) can have the bit 0 or 1.
+        // This makes iteration over entities with a specific component type easy, as we can just iterate
+        // multiple bitmaps to find entities that have all the required components.
+        
+        // Entity Component:
+        // There are 2 ways:
+        // - component[max component types] = offset in bin
+        // - {bin index, offset in bin}[max components per entity]
+        // The first method is easier to implement, but uses more memory per entity.
+        // The second method is more complex to implement, but uses less memory per entity.
 
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
@@ -108,7 +113,7 @@ namespace ncore
             return true;
         }
 
-         static byte* alloc_component(ecs_t* ecs, u32 entity_index, u16 component_type_index)
+        static byte* alloc_component(ecs_t* ecs, u32 entity_index, u16 component_type_index)
         {
             // check if we already have this component allocated for this entity, check this
             // in the occupancy bits of the entity
@@ -304,12 +309,6 @@ namespace ncore
 
         static entity_t s_create_entity(ecs_t* ecs)
         {
-            // check if we need to grow:
-            // - bin3
-            // - entity tags array
-            // - entity generation array
-            // - entity component occupancy array
-            // - adding a components container if needed
             s32 entity_index = -1;
             if (ecs->m_alive_count < ecs->m_free_index)
             {
@@ -346,11 +345,7 @@ namespace ncore
             v_alloc_release((byte*)ecs, ((int_t)ecs->m_base_max_pages) << v_alloc_get_page_size_shift());
         }
 
-        entity_t g_create_entity(ecs_t* ecs)
-        {
-            // todo
-            return 0;
-        }
+        entity_t g_create_entity(ecs_t* ecs) { return s_create_entity(ecs); }
 
         void g_destroy_entity(ecs_t* ecs, entity_t e)
         {
