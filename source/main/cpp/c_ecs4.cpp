@@ -40,7 +40,18 @@ namespace ncore
         // What if we have a binmap per component type, where each entity (index) can have the bit 0 or 1.
         // This makes iteration over entities with a specific component type easy, as we can just iterate
         // multiple bitmaps to find entities that have all the required components.
-        
+        // Perhaps we should make a re-usable binmap that uses virtual memory, e.g.:
+        // v_binmap_t (20):
+        //   - uses virtual memory
+        //   - free_index               u32
+        //   - count                    u32
+        //   - bin 0                    u32
+        //   - bin 2 offset             u32
+        //   - bin 3 offset             u32
+        //   - bin 1 (u32[32])          32 * 32 = 1024 bits, 128 bytes
+        //   - bin 2 (u32[1024 / 32])   32 * 32 * 32 = 32768 bits, 4 KB
+        //   - bin 3 (growing)          32 * 32 * 32 * 32 = 1,048,576 bits, 128 KB
+
         // Entity Component:
         // There are 2 ways:
         // - component[max component types] = offset in bin
