@@ -4,6 +4,7 @@
 #include "ccore/c_bin.h"
 #include "ccore/c_debug.h"
 #include "ccore/c_duomap1.h"
+#include "ccore/c_math.h"
 #include "ccore/c_memory.h"
 #include "cbase/c_integer.h"
 
@@ -157,14 +158,25 @@ namespace ncore
                 void* cp_ptr = nbin::alloc(cp_bin);
                 if (cp_ptr != nullptr)
                 {
+                    u8* cp_local_bits    = &ecs->m_info_array[entity_index * ecs->m_info_bytes_per_entity + 1];
+                    u8* cp_indexed_array = &ecs->m_cp_indexed_array[entity_index * ecs->m_max_component_types];
+                    s32 cp_local_index   = -1;
+                    for (i16 i = 0; i < ecs->m_info_bytes_per_entity; i++)
+                    {
+                        if (cp_local_bits[i] != 0xFF)
+                        {
+                            cp_local_index = (s32)math::findFirstBit((u8)~cp_local_bits[i]);
+                            break;
+                        }
+                    }
+                    if (cp_local_index < 0)
+                        return nullptr;
                     occupancy_bits[byte_index]             = occupancy_bits[byte_index] | bit_mask;
-                    u8& cp_count                           = ecs->m_info_array[entity_index * 2 + 1];
-                    u8* cp_indexed_array                   = &ecs->m_cp_indexed_array[entity_index * ecs->m_max_component_types];
-                    cp_indexed_array[component_type_index] = cp_count;
                     const u32 cp_reference                 = nbin::ptr2idx(cp_bin, cp_ptr);
                     u32*      cp_reference_array           = ecs->m_cp_reference_array + (entity_index * (ecs->m_reference_bytes_per_entity >> 2));
-                    cp_reference_array[cp_count]           = cp_reference;
-                    cp_count++;
+                    cp_reference_array[cp_local_index]     = cp_reference;
+                    cp_indexed_array[component_type_index] = (u8)cp_local_index;
+                    cp_local_bits[cp_local_index >> 3] |= (1 << (cp_local_index & 7));
                     return (byte*)cp_ptr;
                 }
             }
