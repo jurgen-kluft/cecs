@@ -1,0 +1,369 @@
+#include "ccore/c_target.h"
+#include "ccore/c_allocator.h"
+#include "cbase/c_buffer.h"
+#include "ccore/c_random.h"
+#include "cecs/c_ecs4.h"
+
+#include "cunittest/cunittest.h"
+
+using namespace ncore;
+using namespace ncore::necs4;
+
+namespace ncore
+{
+    struct position_t
+    {
+        DECLARE_ECS4_COMPONENT(0);
+        u32 x, y, z;
+    };
+
+    struct velocity_t
+    {
+        DECLARE_ECS4_COMPONENT(1);
+        u32 x, y, z;
+        u32 speed;
+    };
+
+    struct physics_state_t
+    {
+        DECLARE_ECS4_COMPONENT(2);
+        s32 rest;
+    };
+
+    struct u8_t
+    {
+        DECLARE_ECS4_COMPONENT(3);
+        u8 value;
+    };
+
+    struct enemy_tag_t
+    {
+        DECLARE_ECS4_TAG(0);
+    };
+
+    struct friendly_tag_t
+    {
+        DECLARE_ECS4_TAG(1);
+    };
+
+    struct target_tag_t
+    {
+        DECLARE_ECS4_TAG(2);
+    };
+
+    struct dirty_tag_t
+    {
+        DECLARE_ECS4_TAG(3);
+    };
+
+} // namespace ncore
+
+UNITTEST_SUITE_BEGIN(ecs4)
+{
+    UNITTEST_FIXTURE(main)
+    {
+        UNITTEST_ALLOCATOR;
+
+        UNITTEST_FIXTURE_SETUP() {}
+        UNITTEST_FIXTURE_TEARDOWN() {}
+
+        UNITTEST_TEST(create_destroy_ecs)
+        {
+            ecs_t* ecs = g_create_ecs(64, 256, 16);
+            g_destroy_ecs(ecs);
+        }
+
+        UNITTEST_TEST(register_component_types)
+        {
+            ecs_t* ecs = g_create_ecs(64, 256, 16);
+
+            g_register_component_type<u8_t>(ecs);
+            g_register_component_type<position_t>(ecs);
+            g_register_component_type<velocity_t>(ecs);
+            g_register_component_type<physics_state_t>(ecs);
+
+            g_destroy_ecs(ecs);
+        }
+
+        UNITTEST_TEST(create_and_destroy_entities)
+        {
+            ecs_t* ecs = g_create_ecs(64, 256, 16);
+
+            entity_t e01 = g_create_entity(ecs);
+            entity_t e02 = g_create_entity(ecs);
+            entity_t e03 = g_create_entity(ecs);
+            entity_t e04 = g_create_entity(ecs);
+
+            g_destroy_entity(ecs, e01);
+            g_destroy_entity(ecs, e02);
+            g_destroy_entity(ecs, e03);
+            g_destroy_entity(ecs, e04);
+
+            g_destroy_ecs(ecs);
+        }
+
+        UNITTEST_TEST(create_destroy_many_entities)
+        {
+            ecs_t* ecs = g_create_ecs(64, 256, 16);
+
+            entity_t entities[512];
+            for (s32 i = 0; i < 512; ++i)
+            {
+                entities[i] = g_create_entity(ecs);
+            }
+
+            for (s32 i = 0; i < 512; ++i)
+            {
+                g_destroy_entity(ecs, entities[i]);
+            }
+
+            g_destroy_ecs(ecs);
+        }
+
+        UNITTEST_TEST(create_entity_and_add_component)
+        {
+            ecs_t* ecs = g_create_ecs(64, 256, 16);
+
+            g_register_component_type<u8_t>(ecs);
+            g_register_component_type<position_t>(ecs);
+
+            entity_t e01 = g_create_entity(ecs);
+
+            u8_t* cpa1 = g_add_cp<u8_t>(ecs, e01);
+            CHECK_NOT_NULL(cpa1);
+            CHECK_TRUE(g_has_cp<u8_t>(ecs, e01));
+            u8_t* cp1 = g_get_cp<u8_t>(ecs, e01);
+            CHECK_NOT_NULL(cp1);
+            CHECK_EQUAL(cpa1, cp1);
+
+            position_t* cpa2 = g_add_cp<position_t>(ecs, e01);
+            CHECK_NOT_NULL(cpa2);
+            CHECK_NOT_EQUAL((void*)cpa1, (void*)cpa2);
+            CHECK_TRUE(g_has_cp<position_t>(ecs, e01));
+            position_t* cp2 = g_get_cp<position_t>(ecs, e01);
+            CHECK_NOT_NULL(cp2);
+            CHECK_EQUAL(cpa2, cp2);
+
+            g_destroy_entity(ecs, e01);
+
+            g_destroy_ecs(ecs);
+        }
+
+        static void RandomShuffle(entity_t * v, s32 size, u64 seed)
+        {
+            xor_random_t rng(seed);
+            for (s32 i = 0; i < size; ++i)
+            {
+                const s32      j = (s32)(g_random_u32(&rng) & 0x7fffffff) % size;
+                const entity_t t = v[i];
+                v[i]             = v[j];
+                v[j]             = t;
+            }
+        }
+
+        UNITTEST_TEST(create_entities_with_components)
+        {
+            ecs_t* ecs = g_create_ecs(64, 256, 16);
+
+            g_register_component_type<u8_t>(ecs);
+            g_register_component_type<position_t>(ecs);
+            g_register_component_type<velocity_t>(ecs);
+
+            const s32 num_entities = 500;
+            entity_t* entities     = g_allocate_array<entity_t>(Allocator, num_entities);
+            for (s32 i = 0; i < num_entities; ++i)
+            {
+                entity_t e  = g_create_entity(ecs);
+                entities[i] = e;
+
+                g_add_cp<u8_t>(ecs, e);
+                g_add_cp<position_t>(ecs, e);
+                g_add_cp<velocity_t>(ecs, e);
+
+                u8_t* cpa1  = g_add_cp<u8_t>(ecs, e);
+                cpa1->value = (u8)i;
+                CHECK_NOT_NULL(cpa1);
+                CHECK_TRUE(g_has_cp<u8_t>(ecs, e));
+                u8_t* cp1 = g_get_cp<u8_t>(ecs, e);
+                CHECK_NOT_NULL(cp1);
+                CHECK_EQUAL((void const*)cpa1, (void const*)cp1);
+
+                position_t* cpa2 = g_add_cp<position_t>(ecs, e);
+                cpa2->x          = (u32)i;
+                cpa2->y          = (u32)i;
+                cpa2->z          = (u32)i;
+                CHECK_NOT_NULL(cpa2);
+                CHECK_NOT_EQUAL((void const*)cpa1, (void const*)cpa2);
+                CHECK_TRUE(g_has_cp<position_t>(ecs, e));
+                position_t* cp2 = g_get_cp<position_t>(ecs, e);
+                CHECK_NOT_NULL(cp2);
+                CHECK_EQUAL((void const*)cpa2, (void const*)cp2);
+
+                velocity_t* cpa3 = g_add_cp<velocity_t>(ecs, e);
+                cpa3->x          = (u32)i + 1 + (num_entities * 10);
+                cpa3->y          = (u32)i + 2 + (num_entities * 10);
+                cpa3->z          = (u32)i + 3 + (num_entities * 10);
+                cpa3->speed      = (u32)i + 4 + (num_entities * 10);
+                CHECK_NOT_NULL(cpa3);
+                CHECK_NOT_EQUAL((void const*)cpa1, (void const*)cpa3);
+                CHECK_NOT_EQUAL((void const*)cpa2, (void const*)cpa3);
+                CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
+                velocity_t* cp3 = g_get_cp<velocity_t>(ecs, e);
+                CHECK_NOT_NULL(cp3);
+                CHECK_EQUAL((void const*)cpa3, (void const*)cp3);
+            }
+
+            // Verify the contents of the components
+            for (s32 i = 0; i < num_entities; ++i)
+            {
+                entity_t e = entities[i];
+
+                u8_t* cp1 = g_get_cp<u8_t>(ecs, e);
+                CHECK_NOT_NULL(cp1);
+                CHECK_EQUAL(cp1->value, (u8)i);
+
+                position_t* cp2 = g_get_cp<position_t>(ecs, e);
+                CHECK_NOT_NULL(cp2);
+                CHECK_EQUAL(cp2->x, (u32)i);
+                CHECK_EQUAL(cp2->y, (u32)i);
+                CHECK_EQUAL(cp2->z, (u32)i);
+
+                velocity_t* cp3 = g_get_cp<velocity_t>(ecs, e);
+                CHECK_NOT_NULL(cp3);
+                CHECK_EQUAL(cp3->x, (u32)i + 1 + (num_entities * 10));
+                CHECK_EQUAL(cp3->y, (u32)i + 2 + (num_entities * 10));
+                CHECK_EQUAL(cp3->z, (u32)i + 3 + (num_entities * 10));
+                CHECK_EQUAL(cp3->speed, (u32)i + 4 + (num_entities * 10));
+            }
+
+            RandomShuffle(entities, num_entities, 0xdeadbeef);
+            for (s32 i = 0; i < num_entities; ++i)
+            {
+                g_destroy_entity(ecs, entities[i]);
+            }
+
+            g_deallocate_array<entity_t>(Allocator, entities);
+
+            g_destroy_ecs(ecs);
+        }
+
+        UNITTEST_TEST(create_entity_and_add_tag)
+        {
+            ecs_t* ecs = g_create_ecs(64, 256, 16);
+
+            entity_t e01 = g_create_entity(ecs);
+            g_add_tag<enemy_tag_t>(ecs, e01);
+
+            CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e01));
+            g_rem_tag<enemy_tag_t>(ecs, e01);
+            CHECK_FALSE(g_has_tag<enemy_tag_t>(ecs, e01));
+
+            g_destroy_entity(ecs, e01);
+
+            g_destroy_ecs(ecs);
+        }
+
+        UNITTEST_TEST(iterator_basic)
+        {
+            ecs_t* ecs = g_create_ecs(64, 256, 16);
+
+            g_register_component_type<u8_t>(ecs);
+            g_register_component_type<position_t>(ecs);
+            g_register_component_type<velocity_t>(ecs);
+
+            entity_t e01 = g_create_entity(ecs);
+            entity_t e02 = g_create_entity(ecs);
+            entity_t e03 = g_create_entity(ecs);
+            entity_t e04 = g_create_entity(ecs);
+
+            g_add_cp<u8_t>(ecs, e01);
+            g_add_cp<u8_t>(ecs, e03);
+            g_add_cp<u8_t>(ecs, e04);
+
+            g_add_cp<position_t>(ecs, e01);
+            g_add_cp<position_t>(ecs, e03);
+
+            g_add_cp<velocity_t>(ecs, e01);
+            g_add_cp<velocity_t>(ecs, e02);
+            g_add_cp<velocity_t>(ecs, e03);
+            g_add_cp<velocity_t>(ecs, e04);
+
+            g_add_tag<enemy_tag_t>(ecs, e01);
+            g_add_tag<enemy_tag_t>(ecs, e02);
+            g_add_tag<enemy_tag_t>(ecs, e03);
+
+            {
+                entity_t reference = g_create_entity(ecs);
+                g_add_cp<u8_t>(ecs, reference);
+                g_add_cp<position_t>(ecs, reference);
+                g_add_tag<enemy_tag_t>(ecs, reference);
+
+                en_iterator_t iter(ecs, reference);
+
+                iter.begin();
+                while (!iter.end())
+                {
+                    entity_t e = iter.entity();
+                    CHECK_TRUE(e == e01 || e == e03);
+
+                    CHECK_TRUE(g_has_cp<u8_t>(ecs, e));
+                    CHECK_TRUE(g_has_cp<position_t>(ecs, e));
+                    CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e));
+
+                    iter.next();
+                }
+
+                g_destroy_entity(ecs, reference);
+            }
+
+            {
+                entity_t reference = g_create_entity(ecs);
+                g_add_cp<velocity_t>(ecs, reference);
+                g_add_tag<enemy_tag_t>(ecs, reference);
+
+                en_iterator_t iter(ecs, reference);
+
+                iter.begin();
+                while (!iter.end())
+                {
+                    entity_t e = iter.entity();
+                    CHECK_TRUE(e == e01 || e == e02 || e == e03);
+
+                    CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
+                    CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e));
+
+                    iter.next();
+                }
+
+                g_destroy_entity(ecs, reference);
+            }
+
+            {
+                en_iterator_t iter(ecs);
+
+                // Iterate all the entities
+
+                s32 index = 0;
+                iter.begin();
+                while (!iter.end())
+                {
+                    entity_t e = iter.entity();
+                    CHECK_TRUE((e == e01 && index == 0) || (e == e02 && index == 1) || (e == e03 && index == 2) || (e == e04 && index == 3));
+
+                    CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
+
+                    iter.next();
+                    index += 1;
+                }
+            }
+
+            g_destroy_entity(ecs, e01);
+            g_destroy_entity(ecs, e02);
+            g_destroy_entity(ecs, e03);
+            g_destroy_entity(ecs, e04);
+
+            g_destroy_ecs(ecs);
+        }
+    }
+}
+UNITTEST_SUITE_END

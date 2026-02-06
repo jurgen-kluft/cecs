@@ -32,6 +32,7 @@ namespace ncore
         inline u8                  g_entity_shard_index(entity_t e) { return (u8)((e & ECS_ENTITY_SHARD_MASK) >> ECS_ENTITY_SHARD_SHIFT); }
 
         struct ecs_t;
+        struct shard_t;
 
 #define DECLARE_ECS4_COMPONENT(N) \
     enum                          \
@@ -45,7 +46,7 @@ namespace ncore
     }
 
         // Create and Destroy ECS
-        ecs_t* g_create_ecs(u32 max_entities = 32768, u16 components_per_entity = 64, u16 max_component_types = 256, u16 max_tag_types = 16);
+        ecs_t* g_create_ecs(u16 components_per_entity = 64, u16 max_component_types = 256, u16 max_tag_types = 16);
         void   g_destroy_ecs(ecs_t* ecs);
 
         // Create and Destroy Entity
@@ -108,9 +109,11 @@ namespace ncore
         private:
             s32 find(s32 entity_index) const;
 
-            ecs_t* m_ecs;              // The ECS
-            s32    m_entity_reference; // The entity blueprint that should be searched for
-            s32    m_entity_index;     // Current entity index
+            ecs_t*   m_ecs;              // The ECS
+            shard_t* m_shard;            // The current shard
+            entity_t m_entity_reference; // Current entity reference
+            s32      m_entity_index;     // Current entity index
+            u8       m_shard_index;      // The current shard index
         };
     } // namespace necs4
 } // namespace ncore

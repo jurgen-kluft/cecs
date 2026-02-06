@@ -19,9 +19,9 @@ namespace ncore
 
         const u32 ECS_ENTITY_ID_MASK       = (0x0000FFFF); // Mask to use to get the entity number out of an identifier
         const u32 ECS_ENTITY_TYPE_MASK     = (0x00FF0000); // Mask to use to get the entity type out of an identifier
-        const u32 ECS_ENTITY_TYPE_MAX      = (0x000000FF); // Maximum type
+//        const u32 ECS_ENTITY_TYPE_MAX      = (0x000000FF); // Maximum type
         const u32 ECS_ENTITY_VERSION_MASK  = (0xFF000000); // Mask to use to get the version out of an identifier
-        const u32 ECS_ENTITY_VERSION_MAX   = (0x000000FF); // Maximum version
+//        const u32 ECS_ENTITY_VERSION_MAX   = (0x000000FF); // Maximum version
         const s16 ECS_ENTITY_TYPE_SHIFT    = (16);         // Extent of the entity id within an identifier
         const s8  ECS_ENTITY_VERSION_SHIFT = (24);         // Extent of the entity id + type within an identifier
 
