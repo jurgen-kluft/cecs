@@ -53,8 +53,8 @@ namespace ncore
         void     g_destroy_entity(ecs_t* ecs, entity_t e);
 
         // Components
-        bool                       g_register_component(ecs_t* ecs, u32 cp_index, s32 cp_sizeof);
-        template <typename T> bool g_register_component(ecs_t* ecs) { return g_register_component(ecs, T::ECS4_COMPONENT_INDEX, sizeof(T)); }
+        void                       g_register_component_type(ecs_t* ecs, u16 cp_index, u32 cp_sizeof);
+        template <typename T> void g_register_component_type(ecs_t* ecs) { g_register_component_type(ecs, T::ECS4_COMPONENT_INDEX, sizeof(T)); }
 
         bool  g_has_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
         void* g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index);

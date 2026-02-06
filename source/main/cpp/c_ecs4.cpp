@@ -41,7 +41,11 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // type definitions and utility functions
-        static inline entity_t s_entity_make(entity_generation_t genid, entity_index_t index) { return ((u32)genid << ECS_ENTITY_GEN_ID_SHIFT) | (index & ECS_ENTITY_INDEX_MASK); }
+        static inline entity_t s_entity_make(entity_generation_t genid, u8 shard_index, entity_index_t entity_index)
+        {
+            // Combine generation ID, shard index, and entity index into a single entity identifier
+            return ((u32)genid << ECS_ENTITY_GEN_ID_SHIFT) | ((u32)shard_index << ECS_ENTITY_SHARD_SHIFT) | (entity_index & ECS_ENTITY_INDEX_MASK);
+        }
 
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
@@ -94,14 +98,18 @@ namespace ncore
                 // calculate the address space to reserve for all arenas
                 const u32 page_size = v_alloc_get_page_size();
 
-                const int_t max_entities     = ECS_SHARD_MAX_ENTITIES;
-                const int_t global_occupancy = math::alignUp((math::alignUp(max_component_types, 8) * max_entities) >> 3, page_size);
-                const int_t local_occupancy  = math::alignUp((math::alignUp(max_components_per_entity, 8) * max_entities) >> 3, page_size);
-                const int_t indexed_array    = math::alignUp((max_component_types * max_entities), page_size);
-                const int_t reference_array  = math::alignUp((sizeof(u16) * max_components_per_entity * max_entities), page_size);
-                const int_t tags_array       = math::alignUp((math::alignUp(max_tags_per_entity, 8) * max_entities) >> 3, page_size);
-                const int_t shard_size       = math::alignUp(sizeof(shard_t) + sizeof(arena_t) * 5 + sizeof(nbin16::bin_t*) * max_component_types + 8192 + 128 + 128, page_size);
-                const int_t total_size       = shard_size + global_occupancy + local_occupancy + indexed_array + reference_array + tags_array;
+                const int_t max_entities              = ECS_SHARD_MAX_ENTITIES;
+                const int_t arenas_size               = sizeof(arena_t) * 5;
+                const int_t component_bins_array_size = sizeof(nbin16::bin_t*) * max_component_types;
+                const int_t shard_struct_size         = sizeof(shard_t);
+                const int_t binmap_size               = 8192 + 128 + 128;
+                const int_t global_occupancy          = math::alignUp((math::alignUp(max_component_types, 8) * max_entities) >> 3, page_size);
+                const int_t local_occupancy           = math::alignUp((math::alignUp(max_components_per_entity, 8) * max_entities) >> 3, page_size);
+                const int_t indexed_array             = math::alignUp((max_component_types * max_entities), page_size);
+                const int_t reference_array           = math::alignUp((sizeof(u16) * max_components_per_entity * max_entities), page_size);
+                const int_t tags_array                = math::alignUp((math::alignUp(max_tags_per_entity, 8) * max_entities) >> 3, page_size);
+                const int_t shard_size                = math::alignUp(shard_struct_size + arenas_size + component_bins_array_size + binmap_size, page_size);
+                const int_t total_size                = shard_size + global_occupancy + local_occupancy + indexed_array + reference_array + tags_array;
 
                 void* base_address = v_alloc_reserve(total_size);
                 if (base_address == nullptr)
@@ -113,7 +121,7 @@ namespace ncore
                     return nullptr;
                 }
 
-                const int_t free_bin1_offset  = sizeof(shard_t) + sizeof(arena_t) * 5 + sizeof(nbin16::bin_t*) * max_component_types;
+                const int_t free_bin1_offset  = shard_struct_size + arenas_size + component_bins_array_size;
                 const int_t alive_bin1_offset = free_bin1_offset + 128;
                 const int_t bin2_offset       = alive_bin1_offset + 128;
 
@@ -136,21 +144,18 @@ namespace ncore
                 return shard;
             }
 
-            static bool s_register_component_type(shard_t* shard, u16 component_type_index, u32 sizeof_component)
+            static void s_register_component_type(shard_t* shard, u16 component_type_index, u32 sizeof_component)
             {
                 ASSERT(component_type_index < shard->m_max_component_types);
                 if (shard->m_component_bins[component_type_index] != nullptr)
-                    return false; // already registered
+                    return;
                 shard->m_component_bins[component_type_index] = nbin16::make_bin(sizeof_component, 65535);
-                return true;
             }
 
             static byte* s_alloc_component(shard_t* shard, u32 entity_index, u16 component_type_index)
             {
                 ASSERT(component_type_index < shard->m_max_component_types);
                 ASSERT(entity_index < shard->m_free_index);
-
-                const u8 page_size_shift = v_alloc_get_page_size_shift();
 
                 byte* cp_global_occupancy = shard->m_cp_global_occupancy->m_base + (entity_index * shard->m_per_entity_global_occupancy_bytes);
 
@@ -207,23 +212,23 @@ namespace ncore
                 ASSERT(component_type_index < shard->m_max_component_types);
                 ASSERT(entity_index < shard->m_free_index);
 
-                const u8  page_size_shift = v_alloc_get_page_size_shift();
-                const u32 byte_index      = component_type_index >> 3;
-                const u8  bit_mask        = (1 << (component_type_index & 7));
+                const u32 byte_index = component_type_index >> 3;
+                const u8  bit_mask   = (1 << (component_type_index & 7));
 
                 byte* cp_global_occupancy = shard->m_cp_global_occupancy->m_base + (entity_index * shard->m_per_entity_global_occupancy_bytes);
                 if (cp_global_occupancy[byte_index] & bit_mask)
                 {
-                    const u8*  cp_indices    = shard->m_cp_indexed->m_base + (entity_index * shard->m_per_entity_indexed_bytes);
-                    const u8   cp_index      = cp_indices[component_type_index];
-                    const u32* cp_references = (u32*)(shard->m_cp_reference->m_base + (entity_index * shard->m_per_entity_reference_bytes));
-                    const u32  cp_reference  = cp_references[component_type_index];
-
-                    nbin16::bin_t* cp_bin = shard->m_component_bins[component_type_index];
+                    const u8*      cp_indices = shard->m_cp_indexed->m_base + (entity_index * shard->m_per_entity_indexed_bytes);
+                    const u8       cp_index   = cp_indices[component_type_index];
+                    nbin16::bin_t* cp_bin     = shard->m_component_bins[component_type_index];
                     if (cp_index < nbin16::size(cp_bin))
                     {
+                        const u32* cp_references = (u32*)(shard->m_cp_reference->m_base + (entity_index * shard->m_per_entity_reference_bytes));
+                        const u32  cp_reference  = cp_references[component_type_index];
+
                         void* cp_ptr = nbin16::idx2ptr(cp_bin, cp_reference);
                         nbin16::free(cp_bin, cp_ptr);
+
                         cp_global_occupancy[byte_index] = cp_global_occupancy[byte_index] & (~bit_mask);
                     }
                 }
@@ -231,10 +236,9 @@ namespace ncore
 
             static bool s_has_component(shard_t* shard, u32 entity_index, u16 component_type_index)
             {
-                const u8    page_size_shift = v_alloc_get_page_size_shift();
-                const byte* occupancy_bits  = shard->m_cp_global_occupancy->m_base + (entity_index * shard->m_per_entity_global_occupancy_bytes);
-                const u32   byte_index      = component_type_index >> 3;
-                const u8    bit_mask        = ((u8)1 << (component_type_index & 7));
+                const byte* occupancy_bits = shard->m_cp_global_occupancy->m_base + (entity_index * shard->m_per_entity_global_occupancy_bytes);
+                const u32   byte_index     = component_type_index >> 3;
+                const u8    bit_mask       = ((u8)1 << (component_type_index & 7));
                 return (occupancy_bits[byte_index] & bit_mask) != 0;
             }
 
@@ -242,8 +246,6 @@ namespace ncore
             {
                 ASSERT(component_type_index < shard->m_max_component_types);
                 ASSERT(entity_index < shard->m_free_index);
-
-                const u8 page_size_shift = v_alloc_get_page_size_shift();
 
                 const u32 byte_index = component_type_index >> 3;
                 const u8  bit_mask   = (1 << (component_type_index & 7));
@@ -270,8 +272,7 @@ namespace ncore
             {
                 if (tg_index >= (shard->m_per_entity_tags_bytes << 3))
                     return false;
-                const u8    page_size_shift = v_alloc_get_page_size_shift();
-                byte const* tag_occupancy   = shard->m_tags->m_base + (g_entity_index(entity) * shard->m_per_entity_tags_bytes);
+                byte const* tag_occupancy = shard->m_tags->m_base + (g_entity_index(entity) * shard->m_per_entity_tags_bytes);
                 return (tag_occupancy[tg_index >> 3] & ((u8)1 << (tg_index & 7))) != 0;
             }
 
@@ -279,8 +280,7 @@ namespace ncore
             {
                 if (tg_index >= (shard->m_per_entity_tags_bytes << 3))
                     return;
-                const u8 page_size_shift = v_alloc_get_page_size_shift();
-                byte*    tag_occupancy   = shard->m_tags->m_base + (g_entity_index(entity) * shard->m_per_entity_tags_bytes);
+                byte* tag_occupancy = shard->m_tags->m_base + (g_entity_index(entity) * shard->m_per_entity_tags_bytes);
                 tag_occupancy[tg_index >> 3] |= ((u8)1 << (tg_index & 7));
             }
 
@@ -288,15 +288,13 @@ namespace ncore
             {
                 if (tg_index >= (shard->m_per_entity_tags_bytes << 3))
                     return;
-                const u8 page_size_shift = v_alloc_get_page_size_shift();
-                byte*    tag_occupancy   = shard->m_tags->m_base + (g_entity_index(entity) * shard->m_per_entity_tags_bytes);
+                byte* tag_occupancy = shard->m_tags->m_base + (g_entity_index(entity) * shard->m_per_entity_tags_bytes);
                 tag_occupancy[tg_index >> 3] &= ~((u8)1 << (tg_index & 7));
             }
 
-            static entity_t s_create_entity(shard_t* shard)
+            static s32 s_create_entity(shard_t* shard)
             {
-                const u8 page_size_shift = v_alloc_get_page_size_shift();
-                s32      entity_index    = -1;
+                s32 entity_index = -1;
 
                 u8* global_occupancy = nullptr;
                 u8* local_occupancy  = nullptr;
@@ -333,22 +331,27 @@ namespace ncore
                 g_memclr(indexed_array, shard->m_per_entity_indexed_bytes);
                 g_memclr(reference_array, shard->m_per_entity_reference_bytes);
                 g_memclr(tags_array, shard->m_per_entity_tags_bytes);
+
+                return entity_index;
             }
 
             static void s_destroy_entity(shard_t* shard, u32 entity_index)
             {
-                const u8 page_size_shift = v_alloc_get_page_size_shift();
-
                 // Free all components associated with this entity
                 // TODO, just scan for '1' bits in global occupancy instead of checking all component types
                 const u8* global_occupancy = shard->m_cp_global_occupancy->m_base + (entity_index * shard->m_per_entity_global_occupancy_bytes);
-                for (u16 ct = 0; ct < shard->m_num_component_bins; ct++)
+                for (u16 i = 0; i < shard->m_per_entity_global_occupancy_bytes; i++)
                 {
-                    const u32 byte_index = ct >> 3;
-                    const u8  bit_mask   = (1 << (ct & 7));
-                    if (global_occupancy[byte_index] & bit_mask)
+                    if (global_occupancy[i] == 0)
+                        continue;
+
+                    u8 bits = global_occupancy[i];
+                    while (bits != 0)
                     {
+                        const u8  bi = (u8)math::findFirstBit(bits);
+                        const u16 ct = (i << 3) + bi;
                         s_free_component(shard, entity_index, ct);
+                        bits = bits & (~(1 << bi));
                     }
                 }
 
@@ -363,6 +366,7 @@ namespace ncore
         struct ecs_t
         {
             DCORE_CLASS_PLACEMENT_NEW_DELETE
+            u32               m_shards_capacity;
             u32               m_shards_count;
             u32               m_page_size_shift;
             u8*               m_shards_sorted;
@@ -377,21 +381,36 @@ namespace ncore
             const u8  page_size_shift = v_alloc_get_page_size_shift();
             const u32 page_size       = (u32)1 << page_size_shift;
 
-            ecs_t* ecs = (ecs_t*)v_alloc_reserve(page_size);
-            if (ecs == nullptr)
+            void* base_address = v_alloc_reserve(page_size);
+            if (base_address == nullptr)
                 return nullptr;
+            if (!v_alloc_commit(base_address, page_size))
+            {
+                v_alloc_release(base_address, page_size);
+                return nullptr;
+            }
 
+            ecs_t* ecs             = (ecs_t*)base_address;
             ecs->m_page_size_shift = page_size_shift;
-            ecs->m_shards_count    = (max_entities + ECS_SHARD_MAX_ENTITIES - 1) / ECS_SHARD_MAX_ENTITIES;
-            ecs->m_shards          = (nshard::shard_t**)(ecs + 1);
+            ecs->m_shards_capacity = 256; // 256 * 65536 = 16 MiB maximum entities
+            ecs->m_shards_count    = 0;
+            ecs->m_shards_sorted   = (u8*)(ecs + 1);
+            ecs->m_shards          = (nshard::shard_t**)(ecs->m_shards_sorted + ecs->m_shards_capacity);
+
+            // initialize shards array
+            g_memclr(ecs->m_shards_sorted, sizeof(u8) * ecs->m_shards_capacity);
+            g_memclr(ecs->m_shards, sizeof(nshard::shard_t*) * ecs->m_shards_capacity);
 
             // create first shard
-            ecs->m_shards[0] = nshard::s_create(max_component_types, components_per_entity, max_tag_types);
+            ecs->m_shards_sorted[0] = 0;
+            ecs->m_shards[0]        = nshard::s_create(max_component_types, components_per_entity, max_tag_types);
             if (ecs->m_shards[0] == nullptr)
             {
                 v_alloc_release((byte*)ecs, page_size);
                 return nullptr;
             }
+
+            ecs->m_shards_count = 1;
 
             return ecs;
         }
@@ -399,26 +418,29 @@ namespace ncore
         void g_destroy_ecs(ecs_t* ecs)
         {
             const u32 page_size = (u32)1 << ecs->m_page_size_shift;
-            for (i32 i = 0; i < ecs->m_shards_count; i++)
+            for (u32 i = 0; i < ecs->m_shards_count; i++)
             {
                 nshard::shard_t* shard = ecs->m_shards[i];
-                for (u16 i = 0; i < shard->m_num_component_bins; i++)
+                for (u16 c = 0; c < shard->m_num_component_bins; c++)
                 {
-                    if (shard->m_component_bins[i] != nullptr)
+                    if (shard->m_component_bins[c] != nullptr)
                     {
-                        nbin16::destroy(shard->m_component_bins[i]);
-                        shard->m_component_bins[i] = nullptr;
+                        nbin16::destroy(shard->m_component_bins[c]);
+                        shard->m_component_bins[c] = nullptr;
                     }
                 }
-                const u8 page_size_shift = v_alloc_get_page_size_shift();
-                v_alloc_release((byte*)ecs, page_size);
             }
+            v_alloc_release((byte*)ecs, page_size);
         }
 
         entity_t g_create_entity(ecs_t* ecs)
         {
-            entity_t e = nshard::s_create_entity(ecs->m_shards[0]);
-            return s_entity_make(0, e);
+            // TODO, if the first shard is full, sort all shards again to find a shard with free entities, or otherwise create a new shard
+
+            const u8         shard_index  = ecs->m_shards_sorted[0];
+            nshard::shard_t* shard        = ecs->m_shards[shard_index];
+            const s32        entity_index = nshard::s_create_entity(shard);
+            return s_entity_make(0, shard_index, (entity_index_t)entity_index);
         }
 
         void g_destroy_entity(ecs_t* ecs, entity_t e)
@@ -428,57 +450,59 @@ namespace ncore
             nshard::s_destroy_entity(shard, g_entity_index(e));
         }
 
-        bool g_register_component(ecs_t* ecs, u32 cp_index, s32 cp_sizeof)
+        void g_register_component_type(ecs_t* ecs, u16 cp_index, u32 cp_sizeof)
         {
-            // TODO : handle multiple shards
-            nshard::shard_t* shard = ecs->m_shards[0];
-            return nshard::s_register_component_type(shard, (u16)cp_index, (u32)cp_sizeof);
+            for (u32 i = 0; i < ecs->m_shards_count; i++)
+            {
+                nshard::shard_t* shard = ecs->m_shards[i];
+                nshard::s_register_component_type(shard, cp_index, cp_sizeof);
+            }
         }
 
         bool g_has_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            const u8 shard_index = g_entity_shard_index(entity);
-            nshard::shard_t* shard = ecs->m_shards[shard_index];
+            const u8         shard_index = g_entity_shard_index(entity);
+            nshard::shard_t* shard       = ecs->m_shards[shard_index];
             return nshard::s_has_component(shard, g_entity_index(entity), (u16)cp_index);
         }
         void* g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            const u8 shard_index = g_entity_shard_index(entity);
-            nshard::shard_t* shard = ecs->m_shards[shard_index];
+            const u8         shard_index = g_entity_shard_index(entity);
+            nshard::shard_t* shard       = ecs->m_shards[shard_index];
             return nshard::s_alloc_component(shard, g_entity_index(entity), (u16)cp_index);
         }
         void g_rem_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            const u8 shard_index = g_entity_shard_index(entity);
-            nshard::shard_t* shard = ecs->m_shards[shard_index];
+            const u8         shard_index = g_entity_shard_index(entity);
+            nshard::shard_t* shard       = ecs->m_shards[shard_index];
             nshard::s_free_component(shard, g_entity_index(entity), (u16)cp_index);
         }
         void* g_get_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            const u8 shard_index = g_entity_shard_index(entity);
-            nshard::shard_t* shard = ecs->m_shards[shard_index];
+            const u8         shard_index = g_entity_shard_index(entity);
+            nshard::shard_t* shard       = ecs->m_shards[shard_index];
             return nshard::s_get_component(shard, g_entity_index(entity), (u16)cp_index);
         }
 
         // Tags
         bool g_has_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
-            const u8 shard_index = g_entity_shard_index(entity);
-            nshard::shard_t* shard = ecs->m_shards[shard_index];
+            const u8         shard_index = g_entity_shard_index(entity);
+            nshard::shard_t* shard       = ecs->m_shards[shard_index];
             return nshard::s_has_tag(shard, entity, tg_index);
         }
 
         void g_add_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
-            const u8 shard_index = g_entity_shard_index(entity);
-            nshard::shard_t* shard = ecs->m_shards[shard_index];
+            const u8         shard_index = g_entity_shard_index(entity);
+            nshard::shard_t* shard       = ecs->m_shards[shard_index];
             nshard::s_add_tag(shard, entity, tg_index);
         }
 
         void g_rem_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
-            const u8 shard_index = g_entity_shard_index(entity);
-            nshard::shard_t* shard = ecs->m_shards[shard_index];
+            const u8         shard_index = g_entity_shard_index(entity);
+            nshard::shard_t* shard       = ecs->m_shards[shard_index];
             nshard::s_rem_tag(shard, entity, tg_index);
         }
 
