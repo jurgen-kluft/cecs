@@ -32,7 +32,7 @@ namespace ncore
         inline u8                  g_entity_archetype_index(entity_t e) { return (u8)((e & ECS_ENTITY_ARCHETYPE_MASK) >> ECS_ENTITY_ARCHETYPE_SHIFT); }
 
         struct ecs_t;
-        struct shard_t;
+        struct archetype_t;
 
 #define DECLARE_ECS4_COMPONENT(N) \
     enum                          \

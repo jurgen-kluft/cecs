@@ -69,30 +69,32 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_destroy_ecs)
         {
-            ecs_t* ecs = g_create_ecs(64, 256, 16);
+            ecs_t* ecs = g_create_ecs(16);
             g_destroy_ecs(ecs);
         }
 
         UNITTEST_TEST(register_component_types)
         {
-            ecs_t* ecs = g_create_ecs(64, 256, 16);
+            ecs_t* ecs = g_create_ecs(16);
+            g_register_archetype(ecs, 0);
 
-            g_register_component_type<u8_t>(ecs);
-            g_register_component_type<position_t>(ecs);
-            g_register_component_type<velocity_t>(ecs);
-            g_register_component_type<physics_state_t>(ecs);
+            g_register_component_type<u8_t>(ecs, 0);
+            g_register_component_type<position_t>(ecs, 0);
+            g_register_component_type<velocity_t>(ecs, 0);
+            g_register_component_type<physics_state_t>(ecs, 0);
 
             g_destroy_ecs(ecs);
         }
 
         UNITTEST_TEST(create_and_destroy_entities)
         {
-            ecs_t* ecs = g_create_ecs(64, 256, 16);
+            ecs_t* ecs = g_create_ecs(16);
+            g_register_archetype(ecs, 0);
 
-            entity_t e01 = g_create_entity(ecs);
-            entity_t e02 = g_create_entity(ecs);
-            entity_t e03 = g_create_entity(ecs);
-            entity_t e04 = g_create_entity(ecs);
+            entity_t e01 = g_create_entity(ecs, 0);
+            entity_t e02 = g_create_entity(ecs, 0);
+            entity_t e03 = g_create_entity(ecs, 0);
+            entity_t e04 = g_create_entity(ecs, 0);
 
             g_destroy_entity(ecs, e01);
             g_destroy_entity(ecs, e02);
@@ -104,7 +106,8 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_destroy_many_entities)
         {
-            ecs_t* ecs = g_create_ecs(64, 256, 16);
+            ecs_t* ecs = g_create_ecs(16);
+            g_register_archetype(ecs, 0);
 
             entity_t entities[512];
             for (s32 i = 0; i < 512; ++i)
@@ -122,12 +125,13 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_entity_and_add_component)
         {
-            ecs_t* ecs = g_create_ecs(64, 256, 16);
+            ecs_t* ecs = g_create_ecs(16);
+            g_register_archetype(ecs, 0);
 
-            g_register_component_type<u8_t>(ecs);
-            g_register_component_type<position_t>(ecs);
+            g_register_component_type<u8_t>(ecs, 0);
+            g_register_component_type<position_t>(ecs, 0);
 
-            entity_t e01 = g_create_entity(ecs);
+            entity_t e01 = g_create_entity(ecs, 0);
 
             u8_t* cpa1 = g_add_cp<u8_t>(ecs, e01);
             CHECK_NOT_NULL(cpa1);
@@ -163,17 +167,18 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_entities_with_components)
         {
-            ecs_t* ecs = g_create_ecs(64, 256, 16);
+            ecs_t* ecs = g_create_ecs(16);
+            g_register_archetype(ecs, 0);
 
-            g_register_component_type<u8_t>(ecs);
-            g_register_component_type<position_t>(ecs);
-            g_register_component_type<velocity_t>(ecs);
+            g_register_component_type<u8_t>(ecs, 0);
+            g_register_component_type<position_t>(ecs, 0);
+            g_register_component_type<velocity_t>(ecs, 0);
 
             const s32 num_entities = 500;
             entity_t* entities     = g_allocate_array<entity_t>(Allocator, num_entities);
             for (s32 i = 0; i < num_entities; ++i)
             {
-                entity_t e  = g_create_entity(ecs);
+                entity_t e  = g_create_entity(ecs, 0);
                 entities[i] = e;
 
                 g_add_cp<u8_t>(ecs, e);
@@ -249,9 +254,10 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_entity_and_add_tag)
         {
-            ecs_t* ecs = g_create_ecs(64, 256, 16);
+            ecs_t* ecs = g_create_ecs(16);
+            g_register_archetype(ecs, 0);
 
-            entity_t e01 = g_create_entity(ecs);
+            entity_t e01 = g_create_entity(ecs, 0);
             g_add_tag<enemy_tag_t>(ecs, e01);
 
             CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e01));
@@ -265,16 +271,17 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(iterator_basic)
         {
-            ecs_t* ecs = g_create_ecs(64, 256, 16);
+            ecs_t* ecs = g_create_ecs(16);
+            g_register_archetype(ecs, 0);
 
-            g_register_component_type<u8_t>(ecs);
-            g_register_component_type<position_t>(ecs);
-            g_register_component_type<velocity_t>(ecs);
+            g_register_component_type<u8_t>(ecs, 0);
+            g_register_component_type<position_t>(ecs, 0);
+            g_register_component_type<velocity_t>(ecs, 0);
 
-            entity_t e01 = g_create_entity(ecs);
-            entity_t e02 = g_create_entity(ecs);
-            entity_t e03 = g_create_entity(ecs);
-            entity_t e04 = g_create_entity(ecs);
+            entity_t e01 = g_create_entity(ecs, 0);
+            entity_t e02 = g_create_entity(ecs, 0);
+            entity_t e03 = g_create_entity(ecs, 0);
+            entity_t e04 = g_create_entity(ecs, 0);
 
             g_add_cp<u8_t>(ecs, e01);
             g_add_cp<u8_t>(ecs, e03);

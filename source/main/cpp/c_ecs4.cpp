@@ -99,18 +99,6 @@ namespace ncore
         //     template <typename T> bool has_tag(entity_t e) { return necs4::g_has_tag(g_game_entities, e, T::TAG_INDEX); }
         // } // namespace ngame
 
-        struct archetype_t;
-
-        // An archetype
-        struct archetype_t
-        {
-            u16*         m_component_type_indices; // Array component types that map to local component indices
-            u16          m_num_component_types;    // Number of component types in this archetype
-            u16          m_max_component_types;    // Maximum component types in this archetype
-            u16          m_max_tags;               // Maximum tags in this archetype
-            archetype_t* m_archetype;              // The archetype that holds entities of this archetype
-        };
-
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // type definitions and utility functions
@@ -164,9 +152,9 @@ namespace ncore
 
         static archetype_t* s_create(u32 max_archetype_component_types, u32 max_global_component_types, u32 max_components_per_entity, u32 max_archetype_tags_per_entity, u32 max_global_tags_per_entity)
         {
-            ASSERT(max_component_types <= 64);
+            ASSERT(max_archetype_component_types <= 64);
             ASSERT(max_components_per_entity <= 64);
-            ASSERT(max_tags_per_entity <= 32); // sanity check
+            ASSERT(max_archetype_tags_per_entity <= 32); // sanity check
 
             // tags per entity is either 8, 16 or 32
             // fix incoming max_tags_per_entity
@@ -283,7 +271,7 @@ namespace ncore
 
         static byte* s_alloc_component(archetype_t* archetype, u32 entity_index, u16 global_component_type_index)
         {
-            ASSERT(component_type_index < archetype->m_max_component_types);
+            ASSERT(global_component_type_index < archetype->m_max_component_types);
             ASSERT(entity_index < archetype->m_free_index);
 
             const u16 component_type_index = archetype->m_global_to_local_component_type[global_component_type_index];
@@ -291,9 +279,7 @@ namespace ncore
             u64* occupancy_array = (u64*)archetype->m_cp_occupancy->m_base;
             u64& occupancy       = occupancy_array[entity_index];
 
-            const u32 bit_index  = component_type_index;
-            const u32 byte_index = bit_index >> 3;
-            const u8  bit_mask   = (1u << (bit_index & 7));
+            const u64 bit_mask = ((u64)1 << component_type_index);
 
             nbin16::bin_t* cp_bin = archetype->m_component_bins[component_type_index];
             ASSERT(cp_bin != nullptr);
@@ -333,13 +319,11 @@ namespace ncore
 
         static void s_free_component(archetype_t* archetype, u32 entity_index, u16 global_component_type_index)
         {
-            ASSERT(component_type_index < archetype->m_max_component_types);
+            ASSERT(global_component_type_index < archetype->m_max_component_types);
             ASSERT(entity_index < archetype->m_free_index);
 
             const u16 component_type_index = archetype->m_global_to_local_component_type[global_component_type_index];
-
-            const u32 byte_index = component_type_index >> 3;
-            const u8  bit_mask   = (1u << (component_type_index & 7));
+            const u64 bit_mask             = ((u64)1 << component_type_index);
 
             u64* occupancy_array = (u64*)archetype->m_cp_occupancy->m_base;
             u64& occupancy       = occupancy_array[entity_index];
@@ -366,12 +350,12 @@ namespace ncore
 
         static bool s_has_component(archetype_t* archetype, u32 entity_index, u16 global_component_type_index)
         {
-            ASSERT(component_type_index < archetype->m_max_component_types);
+            ASSERT(global_component_type_index < archetype->m_max_component_types);
             ASSERT(entity_index < archetype->m_free_index);
             const u16  component_type_index = archetype->m_global_to_local_component_type[global_component_type_index];
             const u64* occupancy_array      = (const u64*)archetype->m_cp_occupancy->m_base;
             const u64  occupancy            = occupancy_array[entity_index];
-            const u8   bit_mask             = ((u8)1 << (component_type_index & 7));
+            const u64  bit_mask             = ((u64)1 << component_type_index);
             return (occupancy & bit_mask) != 0;
         }
 
@@ -381,7 +365,7 @@ namespace ncore
             ASSERT(entity_index < archetype->m_free_index);
 
             const u16 component_type_index = archetype->m_global_to_local_component_type[global_component_type_index];
-            const u8  bit_mask             = (1u << (component_type_index & 7));
+            const u64 bit_mask             = ((u64)1 << component_type_index);
 
             const u64* occupancy_array = (const u64*)archetype->m_cp_occupancy->m_base;
             const u64  occupancy       = occupancy_array[entity_index];
