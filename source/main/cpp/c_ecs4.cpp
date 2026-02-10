@@ -24,7 +24,7 @@ namespace ncore
         count++;
     }
 
-    template <typename T> void g_array_remove(T* array, u16& count, u32 index)
+    template <typename T> void g_array_remove(T* array, u16& count, u16 max_count, u32 index)
     {
         ASSERT(index < count);
         for (u32 i = index; i < count - 1; ++i)
@@ -111,44 +111,44 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
-        // ecs archetype (96 bytes), maximum of 65536 entities per archetype
+        // ecs archetype (112 bytes), maximum of 65536 entities per archetype
         // --------------------------------------------------------------------------------------------------------
 #define ECS_archetype_MAX_ENTITIES 65536
 
         struct archetype_t
         {
             DCORE_CLASS_PLACEMENT_NEW_DELETE
-            u16*            m_global_to_local_component_type; // map global component type index to local component type index
-            u8*             m_global_to_local_tag_type;       // map global tag type index to local tag type index
-            nbin16::bin_t** m_component_bins;                 // array of component bins (max 64)
-            arena_t*        m_cp_occupancy;                   // component occupancy bits per entity (u64)
-            arena_t*        m_cp_reference;                   // component reference array (u16[])
-            arena_t*        m_tags;                           // tag bits array (u8, u16 or u32)
-            u32             m_reserved_pages;                 // total number of reserved pages for this archetype
-            u16             m_max_component_types;            // maximum number of component bins (max 64)
-            u16             m_num_component_bins;             // current number of component bins
-            u16             m_num_tags;                       // current number of tags
-            u16             m_per_entity_components;          // number of components per entity
-            u16             m_per_entity_tags;                // tag bits array
-            u16             m_padding;                        // padding to make the structure aligned
-            u32             m_free_index;                     // first free entity index
-            u32             m_alive_count;                    // number of alive entities
-            u64             m_free_bin0;                      // 16 * 64 * 64 = 65536 entities
-            u64             m_alive_bin0;                     // 16 * 64 * 64 = 65536 entities
-            u64*            m_free_bin1;                      // track the 0 bits in m_entity_bin2 (16 * sizeof(u64) = 128 bytes)
-            u64*            m_alive_bin1;                     // track the 1 bits in m_entity_bin2 (16 * sizeof(u64) = 128 bytes)
-            u64*            m_bin2;                           // '1' bit = alive entity, '0' bit = free entity (65536 bits = 8 KB)
+            u16*            m_global_to_local_cp_type;  // map global component type index to local component type index
+            u8*             m_global_to_local_tag_type; // map global tag type index to local tag type index
+            nbin16::bin_t** m_cp_bins;                  // array of component bins (max 64)
+            arena_t*        m_cp_occupancy;             // component occupancy bits per entity (u64)
+            arena_t*        m_cp_reference;             // component reference array (u16[])
+            arena_t*        m_tags;                     // tag bits array (u8, u16 or u32)
+            u32             m_reserved_pages;           // total number of reserved pages for this archetype
+            u16             m_max_cp_types;             // maximum number of component bins (max 64)
+            u16             m_num_cp_bins;              // current number of component bins
+            u16             m_num_tags;                 // current number of tags
+            u16             m_per_entity_cps;           // number of components per entity
+            u16             m_per_entity_tags;          // tag bits array
+            u16             m_page_size_shift;          // padding to make the structure aligned
+            u32             m_free_index;               // first free entity index
+            u32             m_alive_count;              // number of alive entities
+            u64             m_free_bin0;                // 16 * 64 * 64 = 65536 entities
+            u64             m_alive_bin0;               // 16 * 64 * 64 = 65536 entities
+            u64*            m_free_bin1;                // track the 0 bits in m_entity_bin2 (16 * sizeof(u64) = 128 bytes)
+            u64*            m_alive_bin1;               // track the 1 bits in m_entity_bin2 (16 * sizeof(u64) = 128 bytes)
+            u64*            m_bin2;                     // '1' bit = alive entity, '0' bit = free entity (65536 bits = 8 KB)
         };
         // ecs_archetype_t is followed in memory by:
-        // u16                                  m_global_to_local_component_type[];        // map global component type index to local component type index (u16[])
-        // u8                                   m_global_to_local_tag_type[];              // map global tag type
-        // arena_t                              m_cp_occupancy;                            // component occupancy bits array (u8[])
-        // arena_t                              m_cp_reference;                            // component reference array (u16[])
-        // arena_t                              m_tags;                                    // tag bits array (u8[])
-        // bin_t*                               m_component_bins[m_max_component_types];   // Array of component bins
-        // u64                                  m_free_bin1[1024 / 64];                    // 1024 bits = 128 B
-        // u64                                  m_alive_bin1[1024 / 64];                   // 1024 bits = 128 B
-        // u64                                  m_bin2[65536 / 64];                        // 65536 bits = 8 KiB
+        // u16         m_global_to_local_cp_type[];     // map global component type index to local component type index (u16[])
+        // u8          m_global_to_local_tag_type[];    // map global tag type
+        // arena_t     m_cp_occupancy;                  // component occupancy bits array (u8[])
+        // arena_t     m_cp_reference;                  // component reference array (u16[])
+        // arena_t     m_tags;                          // tag bits array (u8[])
+        // bin_t*      m_cp_bins[m_max_cp_types];       // Array of component bins
+        // u64         m_free_bin1[1024 / 64];          // 1024 bits = 128 B
+        // u64         m_alive_bin1[1024 / 64];         // 1024 bits = 128 B
+        // u64         m_bin2[65536 / 64];              // 65536 bits = 8 KiB
 
         static archetype_t* s_create(u32 max_archetype_component_types, u32 max_global_component_types, u32 max_components_per_entity, u32 max_archetype_tags_per_entity, u32 max_global_tags_per_entity)
         {
@@ -193,25 +193,26 @@ namespace ncore
             const int_t alive_bin1_offset = free_bin1_offset + 128;
             const int_t bin2_offset       = alive_bin1_offset + 128;
 
-            archetype_t* archetype                      = (archetype_t*)base_address;
-            archetype->m_global_to_local_component_type = (u16*)(archetype + 1);
-            archetype->m_global_to_local_tag_type       = (u8*)(archetype->m_global_to_local_component_type + max_global_component_types);
-            archetype->m_cp_occupancy                   = (arena_t*)(archetype->m_global_to_local_tag_type + max_global_tags_per_entity);
-            archetype->m_cp_reference                   = archetype->m_cp_occupancy + 1;
-            archetype->m_tags                           = archetype->m_cp_reference + 1;
-            archetype->m_reserved_pages                 = (u32)(total_size >> page_size_shift);
-            archetype->m_component_bins                 = (nbin16::bin_t**)(archetype->m_tags + 1);
-            archetype->m_max_component_types            = (u16)max_archetype_component_types;
-            archetype->m_num_component_bins             = 0;
-            archetype->m_per_entity_components          = max_archetype_component_types;
-            archetype->m_per_entity_tags                = (u16)((math::alignUp(max_archetype_tags_per_entity, 8)));
-            archetype->m_free_index                     = 0;
-            archetype->m_alive_count                    = 0;
-            archetype->m_free_bin0                      = D_U64_MAX;
-            archetype->m_alive_bin0                     = D_U64_MAX;
-            archetype->m_free_bin1                      = (u64*)((byte*)base_address + free_bin1_offset);
-            archetype->m_alive_bin1                     = (u64*)((byte*)base_address + alive_bin1_offset);
-            archetype->m_bin2                           = (u64*)((byte*)base_address + bin2_offset);
+            archetype_t* archetype                = (archetype_t*)base_address;
+            archetype->m_global_to_local_cp_type  = (u16*)(archetype + 1);
+            archetype->m_global_to_local_tag_type = (u8*)(archetype->m_global_to_local_cp_type + max_global_component_types);
+            archetype->m_cp_occupancy             = (arena_t*)(archetype->m_global_to_local_tag_type + max_global_tags_per_entity);
+            archetype->m_cp_reference             = archetype->m_cp_occupancy + 1;
+            archetype->m_tags                     = archetype->m_cp_reference + 1;
+            archetype->m_reserved_pages           = (u32)(total_size >> page_size_shift);
+            archetype->m_cp_bins                  = (nbin16::bin_t**)(archetype->m_tags + 1);
+            archetype->m_max_cp_types             = (u16)max_archetype_component_types;
+            archetype->m_num_cp_bins              = 0;
+            archetype->m_per_entity_cps           = max_archetype_component_types;
+            archetype->m_per_entity_tags          = (u16)((math::alignUp(max_archetype_tags_per_entity, 8)));
+            archetype->m_page_size_shift          = page_size_shift;
+            archetype->m_free_index               = 0;
+            archetype->m_alive_count              = 0;
+            archetype->m_free_bin0                = D_U64_MAX;
+            archetype->m_alive_bin0               = D_U64_MAX;
+            archetype->m_free_bin1                = (u64*)((byte*)base_address + free_bin1_offset);
+            archetype->m_alive_bin1               = (u64*)((byte*)base_address + alive_bin1_offset);
+            archetype->m_bin2                     = (u64*)((byte*)base_address + bin2_offset);
 
             // initialize all arenas
             byte* arena_memory_base = base_address + archetype_size;
@@ -221,9 +222,9 @@ namespace ncore
             arena_memory_base += cp_reference;
             narena::init_arena(archetype->m_tags, arena_memory_base, tags_array, 0);
 
-            g_memory_fill(archetype->m_global_to_local_component_type, 0xFFFF, global_to_local_cp_size);
-            g_memory_fill(archetype->m_global_to_local_tag_type, 0xFF, global_to_local_tg_size);
-            g_memory_fill(archetype->m_component_bins, 0, component_bins_array_size);
+            g_memory_fill(archetype->m_global_to_local_cp_type, 0xFFFFFFFF, global_to_local_cp_size);
+            g_memory_fill(archetype->m_global_to_local_tag_type, 0xFFFFFFFF, global_to_local_tg_size);
+            g_memory_fill(archetype->m_cp_bins, 0, component_bins_array_size);
 
             return archetype;
         }
@@ -232,13 +233,15 @@ namespace ncore
         {
             if (archetype != nullptr)
             {
+                const int_t reserved_size = (int_t)archetype->m_reserved_pages << archetype->m_page_size_shift;
+
                 // free all component bins
-                for (u16 i = 0; i < archetype->m_max_component_types; i++)
+                for (u16 i = 0; i < archetype->m_max_cp_types; i++)
                 {
-                    if (archetype->m_component_bins[i] != nullptr)
+                    if (archetype->m_cp_bins[i] != nullptr)
                     {
-                        nbin16::destroy(archetype->m_component_bins[i]);
-                        archetype->m_component_bins[i] = nullptr;
+                        nbin16::destroy(archetype->m_cp_bins[i]);
+                        archetype->m_cp_bins[i] = nullptr;
                     }
                 }
                 // free all arenas
@@ -246,18 +249,18 @@ namespace ncore
                 narena::destroy(archetype->m_cp_reference);
                 narena::destroy(archetype->m_tags);
 
-                v_alloc_release((byte*)archetype, archetype->m_reserved_pages << archetype->m_cp_occupancy->m_page_size_shift);
+                v_alloc_release((void*)archetype, reserved_size);
             }
         }
 
         static void s_register_component_type(archetype_t* archetype, u16 global_component_type_index, u32 sizeof_component)
         {
-            ASSERT(global_component_type_index < archetype->m_max_component_types);
-            if (archetype->m_component_bins[global_component_type_index] != nullptr)
+            ASSERT(global_component_type_index < archetype->m_max_cp_types);
+            if (archetype->m_global_to_local_cp_type[global_component_type_index] != 0xFFFF)
                 return;
-            archetype->m_global_to_local_component_type[global_component_type_index] = (u16)archetype->m_num_component_bins;
-            archetype->m_component_bins[archetype->m_num_component_bins]             = nbin16::make_bin(sizeof_component, 65535);
-            archetype->m_num_component_bins++;
+            archetype->m_global_to_local_cp_type[global_component_type_index] = (u16)archetype->m_num_cp_bins;
+            archetype->m_cp_bins[archetype->m_num_cp_bins]                    = nbin16::make_bin(sizeof_component, 65535);
+            archetype->m_num_cp_bins++;
         }
 
         static void s_register_tag_type(archetype_t* archetype, u16 global_tag_type_index)
@@ -271,17 +274,17 @@ namespace ncore
 
         static byte* s_alloc_component(archetype_t* archetype, u32 entity_index, u16 global_component_type_index)
         {
-            ASSERT(global_component_type_index < archetype->m_max_component_types);
+            ASSERT(global_component_type_index < archetype->m_max_cp_types);
             ASSERT(entity_index < archetype->m_free_index);
 
-            const u16 component_type_index = archetype->m_global_to_local_component_type[global_component_type_index];
+            const u16 component_type_index = archetype->m_global_to_local_cp_type[global_component_type_index];
 
             u64* occupancy_array = (u64*)archetype->m_cp_occupancy->m_base;
             u64& occupancy       = occupancy_array[entity_index];
 
             const u64 bit_mask = ((u64)1 << component_type_index);
 
-            nbin16::bin_t* cp_bin = archetype->m_component_bins[component_type_index];
+            nbin16::bin_t* cp_bin = archetype->m_cp_bins[component_type_index];
             ASSERT(cp_bin != nullptr);
 
             if (occupancy & bit_mask)
@@ -290,7 +293,7 @@ namespace ncore
                 const s32 cp_index = (s32)math::countBits(occupancy & (bit_mask - 1));
 
                 const u16* cp_reference_array = (const u16*)archetype->m_cp_reference->m_base;
-                const u16* cp_references      = cp_reference_array + (entity_index * archetype->m_per_entity_components);
+                const u16* cp_references      = cp_reference_array + (entity_index * archetype->m_per_entity_cps);
                 const u16  cp_reference       = cp_references[cp_index];
                 return (byte*)nbin16::idx2ptr(cp_bin, cp_reference);
             }
@@ -299,6 +302,8 @@ namespace ncore
                 void* cp_ptr = nbin16::alloc(cp_bin);
                 if (cp_ptr != nullptr)
                 {
+                    // calculate the number of components currently in the reference array
+                    u16 num_components = (u16)math::countBits(occupancy);
                     // mark component as allocated
                     occupancy = occupancy | bit_mask;
 
@@ -307,9 +312,9 @@ namespace ncore
 
                     // store component reference
                     u16* cp_reference_array = (u16*)archetype->m_cp_reference->m_base;
-                    u16* cp_references      = cp_reference_array + (entity_index * archetype->m_per_entity_components);
+                    u16* cp_references      = cp_reference_array + (entity_index * archetype->m_per_entity_cps);
                     u16  cp_reference       = (u16)nbin16::ptr2idx(cp_bin, cp_ptr);
-                    g_array_insert(cp_references, archetype->m_per_entity_components, archetype->m_per_entity_components, cp_index, cp_reference);
+                    g_array_insert(cp_references, num_components, archetype->m_per_entity_cps, cp_index, cp_reference);
 
                     return (byte*)cp_ptr;
                 }
@@ -317,42 +322,46 @@ namespace ncore
             return nullptr;
         }
 
-        static void s_free_component(archetype_t* archetype, u32 entity_index, u16 global_component_type_index)
+        static void s_free_local_component(archetype_t* archetype, u32 entity_index, u16 component_type_index)
         {
-            ASSERT(global_component_type_index < archetype->m_max_component_types);
-            ASSERT(entity_index < archetype->m_free_index);
-
-            const u16 component_type_index = archetype->m_global_to_local_component_type[global_component_type_index];
-            const u64 bit_mask             = ((u64)1 << component_type_index);
-
-            u64* occupancy_array = (u64*)archetype->m_cp_occupancy->m_base;
-            u64& occupancy       = occupancy_array[entity_index];
+            const u64 bit_mask        = ((u64)1 << component_type_index);
+            u64*      occupancy_array = (u64*)archetype->m_cp_occupancy->m_base;
+            u64&      occupancy       = occupancy_array[entity_index];
             if (occupancy & bit_mask)
             {
-                occupancy = occupancy & (~bit_mask);
+                u16 num_components = (u16)math::countBits(occupancy);
+                occupancy          = occupancy & (~bit_mask);
 
                 // find local component index by counting bits before 'bit_index'
                 const s32 cp_index = (s32)math::countBits(occupancy & (bit_mask - 1));
 
-                nbin16::bin_t* cp_bin = archetype->m_component_bins[component_type_index];
+                nbin16::bin_t* cp_bin = archetype->m_cp_bins[component_type_index];
                 ASSERT(cp_bin != nullptr);
 
                 u16*  cp_reference_array = (u16*)archetype->m_cp_reference->m_base;
-                u16*  cp_references      = cp_reference_array + (entity_index * archetype->m_per_entity_components);
+                u16*  cp_references      = cp_reference_array + (entity_index * archetype->m_per_entity_cps);
                 u16   cp_reference       = cp_references[cp_index];
                 void* cp_ptr             = nbin16::idx2ptr(cp_bin, cp_reference);
                 nbin16::free(cp_bin, cp_ptr);
 
                 // remove component reference from the array
-                g_array_remove(cp_references, archetype->m_per_entity_components, cp_index);
+                g_array_remove(cp_references, num_components, archetype->m_per_entity_cps, cp_index);
             }
+        }
+
+        static void s_free_component(archetype_t* archetype, u32 entity_index, u16 global_component_type_index)
+        {
+            ASSERT(global_component_type_index < archetype->m_max_cp_types);
+            ASSERT(entity_index < archetype->m_free_index);
+            const u16 component_type_index = archetype->m_global_to_local_cp_type[global_component_type_index];
+            s_free_local_component(archetype, entity_index, component_type_index);
         }
 
         static bool s_has_component(archetype_t* archetype, u32 entity_index, u16 global_component_type_index)
         {
-            ASSERT(global_component_type_index < archetype->m_max_component_types);
+            ASSERT(global_component_type_index < archetype->m_max_cp_types);
             ASSERT(entity_index < archetype->m_free_index);
-            const u16  component_type_index = archetype->m_global_to_local_component_type[global_component_type_index];
+            const u16  component_type_index = archetype->m_global_to_local_cp_type[global_component_type_index];
             const u64* occupancy_array      = (const u64*)archetype->m_cp_occupancy->m_base;
             const u64  occupancy            = occupancy_array[entity_index];
             const u64  bit_mask             = ((u64)1 << component_type_index);
@@ -361,10 +370,10 @@ namespace ncore
 
         static byte* s_get_component(archetype_t* archetype, u32 entity_index, u16 global_component_type_index)
         {
-            ASSERT(global_component_type_index < archetype->m_max_component_types);
+            ASSERT(global_component_type_index < archetype->m_max_cp_types);
             ASSERT(entity_index < archetype->m_free_index);
 
-            const u16 component_type_index = archetype->m_global_to_local_component_type[global_component_type_index];
+            const u16 component_type_index = archetype->m_global_to_local_cp_type[global_component_type_index];
             const u64 bit_mask             = ((u64)1 << component_type_index);
 
             const u64* occupancy_array = (const u64*)archetype->m_cp_occupancy->m_base;
@@ -376,10 +385,10 @@ namespace ncore
                 const s32 cp_index = (s32)math::countBits(occupancy & (bit_mask - 1));
 
                 const u16* cp_reference_array = (const u16*)archetype->m_cp_reference->m_base;
-                const u16* cp_references      = cp_reference_array + (entity_index * archetype->m_per_entity_components);
+                const u16* cp_references      = cp_reference_array + (entity_index * archetype->m_per_entity_cps);
                 const u16  cp_reference       = cp_references[cp_index];
 
-                nbin16::bin_t* cp_bin = archetype->m_component_bins[component_type_index];
+                nbin16::bin_t* cp_bin = archetype->m_cp_bins[component_type_index];
                 ASSERT(cp_bin != nullptr);
 
                 return (byte*)nbin16::idx2ptr(cp_bin, cp_reference);
@@ -415,32 +424,33 @@ namespace ncore
         {
             s32 entity_index = -1;
 
-            u64* occupancy_array = (u64*)archetype->m_cp_occupancy->m_base;
-            u16* reference_array = (u16*)archetype->m_cp_reference->m_base;
-            u8*  tags_array      = nullptr;
+            u64* occupancy_array;
+            u16* reference_array;
+            u8*  tags_array;
             if (archetype->m_alive_count < archetype->m_free_index)
             {
                 // The hierarchical duomap can be used to find a free entity index
                 entity_index = nduomap18::find0_and_set(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, archetype->m_bin2, archetype->m_free_index);
 
+                occupancy_array = (u64*)archetype->m_cp_occupancy->m_base;
+                reference_array = (u16*)archetype->m_cp_reference->m_base;
+                tags_array      = archetype->m_tags->m_base;
                 occupancy_array = occupancy_array + (entity_index);
-                reference_array = reference_array + (entity_index * archetype->m_per_entity_components);
-                tags_array      = archetype->m_tags->m_base + (entity_index * (math::alignUp(archetype->m_per_entity_tags, 8) >> 3));
+                reference_array = reference_array + (entity_index * archetype->m_per_entity_cps);
+                tags_array      = tags_array + (entity_index * (math::alignUp(archetype->m_per_entity_tags, 8) >> 3));
             }
             else
             {
                 entity_index = archetype->m_free_index++;
 
-                occupancy_array = occupancy_array + (entity_index);
-                reference_array = reference_array + (entity_index * archetype->m_per_entity_components);
+                occupancy_array = (u64*)narena::alloc_and_zero(archetype->m_cp_occupancy, sizeof(u64));
+                reference_array = (u16*)narena::alloc_and_zero(archetype->m_cp_reference, archetype->m_per_entity_cps * sizeof(u16));
                 tags_array      = (u8*)narena::alloc_and_zero(archetype->m_tags, (math::alignUp(archetype->m_per_entity_tags, 8) >> 3));
 
-                // mark entity as alive in the duomap
                 nduomap18::set(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, archetype->m_bin2, archetype->m_free_index, entity_index);
             }
 
-            g_memclr(occupancy_array, archetype->m_per_entity_components * sizeof(u64));
-            g_memclr(reference_array, archetype->m_per_entity_components * sizeof(u16));
+            *occupancy_array = 0;
             g_memclr(tags_array, math::alignUp(archetype->m_per_entity_tags, 8) >> 3);
 
             archetype->m_alive_count++;
@@ -457,8 +467,8 @@ namespace ncore
             while (occupancy != 0)
             {
                 const u8 bin_index = (u8)math::findFirstBit(occupancy);
-                s_free_component(archetype, entity_index, bin_index);
-                occupancy = occupancy & (~(1u << bin_index));
+                s_free_local_component(archetype, entity_index, bin_index);
+                occupancy = occupancy & (~((u64)1 << bin_index));
             }
 
             nduomap18::clr(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, archetype->m_bin2, archetype->m_free_index, entity_index);
@@ -636,18 +646,18 @@ namespace ncore
 
             // See if this entity has all the components and tags that we are looking for by taking the
             // intersection of the component and tag occupancy using the reference entity
+            s32 const    ref_entity_index    = g_entity_index(m_entity_reference);
             u8 const     ref_archetype_index = g_entity_archetype_index(m_entity_reference);
             archetype_t* ref_archetype       = m_ecs->m_archetypes[ref_archetype_index];
-            u64 const*   ref_cp_occupancy    = (u64*)&ref_archetype->m_cp_occupancy->m_base[m_entity_reference * (m_archetype->m_per_entity_components * sizeof(u64))];
-            u8 const*    ref_tag_occupancy   = &ref_archetype->m_tags->m_base[m_entity_reference * (math::alignUp(m_archetype->m_per_entity_tags, 8) >> 3)];
-            s32 const    ref_entity_index    = g_entity_index(m_entity_reference);
+            u64 const*   ref_cp_occupancy    = (u64*)&ref_archetype->m_cp_occupancy->m_base[ref_entity_index * sizeof(u64)];
+            u8 const*    ref_tag_occupancy   = &ref_archetype->m_tags->m_base[ref_entity_index * (math::alignUp(m_archetype->m_per_entity_tags, 8) >> 3)];
 
             entity_index = nduomap18::find1_after(&m_archetype->m_free_bin0, m_archetype->m_free_bin1, &m_archetype->m_alive_bin0, m_archetype->m_alive_bin1, m_archetype->m_bin2, m_archetype->m_free_index, entity_index);
             while (entity_index >= 0)
             {
                 if (entity_index != ref_entity_index)
                 {
-                    u64 const* cur_cp_occupancy   = (u64*)&m_archetype->m_cp_occupancy->m_base[entity_index * (m_archetype->m_per_entity_components * sizeof(u64))];
+                    u64 const* cur_cp_occupancy   = (u64*)&m_archetype->m_cp_occupancy->m_base[entity_index * sizeof(u64)];
                     bool       has_all_components = ((*cur_cp_occupancy & *ref_cp_occupancy) == *ref_cp_occupancy);
                     if (has_all_components)
                     {
