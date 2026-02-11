@@ -15,7 +15,7 @@ namespace ncore
     {
         // ECS Version 4, an Entity-Component-System (ECS) implementation.
 
-        typedef u32 entity_t; // Entity identifier {generation(8) + padding(4) + index(20)}
+        typedef u32 entity_t; // Entity identifier {generation(8) + archetype(8) + index(16)}
         typedef u8  entity_generation_t;
         typedef u32 entity_index_t;
 
