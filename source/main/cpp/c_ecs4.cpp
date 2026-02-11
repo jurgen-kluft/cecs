@@ -102,6 +102,21 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // type definitions and utility functions
+        typedef u8  entity_generation_t;
+        typedef u32 entity_index_t;
+
+        const u32 ECS_ENTITY_NULL            = (0xFFFFFFFF); // Null entity
+        const u32 ECS_ENTITY_INDEX_MASK      = (0x0000FFFF); // Mask to use to get the entity index from an entity identifier
+        const u32 ECS_ENTITY_ARCHETYPE_MASK  = (0x00FF0000); // Mask to use to get the archetype index from an entity identifier
+        const s8  ECS_ENTITY_ARCHETYPE_SHIFT = (16);         // Shift to get the archetype index
+        const u32 ECS_ENTITY_GEN_ID_MASK     = (0xFF000000); // Mask to use to get the generation id from an entity identifier
+        const s8  ECS_ENTITY_GEN_ID_SHIFT    = (24);         // Shift to get the generation id
+
+        inline bool                g_entity_is_null(entity_t e) { return e == ECS_ENTITY_NULL; }
+        inline entity_generation_t g_entity_generation(entity_t e) { return ((u32)e & ECS_ENTITY_GEN_ID_MASK) >> ECS_ENTITY_GEN_ID_SHIFT; }
+        inline entity_index_t      g_entity_index(entity_t e) { return (entity_index_t)e & ECS_ENTITY_INDEX_MASK; }
+        inline u8                  g_entity_archetype_index(entity_t e) { return (u8)((e & ECS_ENTITY_ARCHETYPE_MASK) >> ECS_ENTITY_ARCHETYPE_SHIFT); }
+
         static inline entity_t s_entity_make(entity_generation_t genid, u8 archetype_index, entity_index_t entity_index)
         {
             // Combine generation ID, archetype index, and entity index into a single entity identifier
