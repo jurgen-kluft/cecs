@@ -69,13 +69,13 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_destroy_ecs)
         {
-            ecs_t* ecs = g_create_ecs(16);
+            ecs_t* ecs = g_create_ecs();
             g_destroy_ecs(ecs);
         }
 
         UNITTEST_TEST(register_component_types)
         {
-            ecs_t* ecs = g_create_ecs(16);
+            ecs_t* ecs = g_create_ecs();
             g_register_archetype(ecs, 0);
 
             g_register_component_type<u8_t>(ecs, 0);
@@ -88,7 +88,7 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_and_destroy_entities)
         {
-            ecs_t* ecs = g_create_ecs(16);
+            ecs_t* ecs = g_create_ecs();
             g_register_archetype(ecs, 0);
 
             entity_t e01 = g_create_entity(ecs, 0);
@@ -106,7 +106,7 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_destroy_many_entities)
         {
-            ecs_t* ecs = g_create_ecs(16);
+            ecs_t* ecs = g_create_ecs();
             g_register_archetype(ecs, 0);
 
             entity_t entities[512];
@@ -125,7 +125,7 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_entity_and_add_component)
         {
-            ecs_t* ecs = g_create_ecs(16);
+            ecs_t* ecs = g_create_ecs();
             g_register_archetype(ecs, 0);
 
             g_register_component_type<u8_t>(ecs, 0);
@@ -167,7 +167,7 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_entities_with_components)
         {
-            ecs_t* ecs = g_create_ecs(16);
+            ecs_t* ecs = g_create_ecs();
             g_register_archetype(ecs, 0);
 
             g_register_component_type<u8_t>(ecs, 0);
@@ -254,7 +254,7 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(create_entity_and_add_tag)
         {
-            ecs_t* ecs = g_create_ecs(16);
+            ecs_t* ecs = g_create_ecs();
             g_register_archetype(ecs, 0);
 
             entity_t e01 = g_create_entity(ecs, 0);
@@ -271,12 +271,13 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
         UNITTEST_TEST(iterator_basic)
         {
-            ecs_t* ecs = g_create_ecs(16);
+            ecs_t* ecs = g_create_ecs();
             g_register_archetype(ecs, 0);
 
             g_register_component_type<u8_t>(ecs, 0);
             g_register_component_type<position_t>(ecs, 0);
             g_register_component_type<velocity_t>(ecs, 0);
+            g_register_tag_type<enemy_tag_t>(ecs, 0);
 
             entity_t e01 = g_create_entity(ecs, 0);
             entity_t e02 = g_create_entity(ecs, 0);
@@ -300,12 +301,13 @@ UNITTEST_SUITE_BEGIN(ecs4)
             g_add_tag<enemy_tag_t>(ecs, e03);
 
             {
-                entity_t reference = g_create_entity(ecs);
-                g_add_cp<u8_t>(ecs, reference);
-                g_add_cp<position_t>(ecs, reference);
-                g_add_tag<enemy_tag_t>(ecs, reference);
+                u64 cp_occupancy  = 0;
+                u32 tag_occupancy = 0;
+                g_mark_cp<u8_t>(ecs, 0, cp_occupancy);
+                g_mark_cp<position_t>(ecs, 0, cp_occupancy);
+                g_mark_tag<enemy_tag_t>(ecs, 0, tag_occupancy);
 
-                en_iterator_t iter(ecs, reference);
+                en_iterator_t iter(ecs, 0, cp_occupancy, tag_occupancy);
 
                 iter.begin();
                 while (!iter.end())
@@ -319,16 +321,15 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
                     iter.next();
                 }
-
-                g_destroy_entity(ecs, reference);
             }
 
             {
-                entity_t reference = g_create_entity(ecs);
-                g_add_cp<velocity_t>(ecs, reference);
-                g_add_tag<enemy_tag_t>(ecs, reference);
+                u64 cp_occupancy  = 0;
+                u32 tag_occupancy = 0;
+                g_mark_cp<velocity_t>(ecs, 0, cp_occupancy);
+                g_mark_tag<enemy_tag_t>(ecs, 0, tag_occupancy);
 
-                en_iterator_t iter(ecs, reference);
+                en_iterator_t iter(ecs, 0, cp_occupancy, tag_occupancy);
 
                 iter.begin();
                 while (!iter.end())
@@ -341,14 +342,11 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
                     iter.next();
                 }
-
-                g_destroy_entity(ecs, reference);
             }
 
             {
-                en_iterator_t iter(ecs);
-
-                // Iterate all the entities
+                // Iterate all the entities of the archetype index 0
+                en_iterator_t iter(ecs, 0, 0, 0);
 
                 s32 index = 0;
                 iter.begin();

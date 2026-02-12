@@ -33,11 +33,11 @@ namespace ncore
     }
 
         // Create and Destroy ECS
-        ecs_t* g_create_ecs(u16 max_archetypes = 32);
+        ecs_t* g_create_ecs();
         void   g_destroy_ecs(ecs_t* ecs);
 
         // Archetype registration
-        void g_register_archetype(ecs_t* ecs, u16 archetype_index, u16 components_per_entity = 16, u16 max_archetype_component_types = 32, u16 max_global_component_types = 256, u16 max_archetype_tag_types = 8, u16 max_global_tag_types = 256);
+        void g_register_archetype(ecs_t* ecs, u16 archetype_index, u16 components_per_entity = 16, u16 max_global_component_types = 256, u16 tags_per_entity = 8, u16 max_global_tag_types = 32);
 
         // Create and Destroy Entity
         entity_t g_create_entity(ecs_t* ecs, u16 archetype_index = 0);
@@ -55,6 +55,12 @@ namespace ncore
         void  g_rem_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
         void* g_get_cp(ecs_t* ecs, entity_t entity, u32 cp_index);
 
+        void g_mark_cp(ecs_t* ecs, u16 archetype_index, u32 cp_index, u64& cp_occupancy);
+        void g_mark_tag(ecs_t* ecs, u16 archetype_index, u16 tg_index, u32& tag_occupancy);
+
+        template <typename T> void g_mark_cp(ecs_t* ecs, u16 archetype_index, u64& cp_occupancy) { g_mark_cp(ecs, archetype_index, T::ECS4_COMPONENT_INDEX, cp_occupancy); }
+        template <typename T> void g_mark_tag(ecs_t* ecs, u16 archetype_index, u32& tag_occupancy) { g_mark_tag(ecs, archetype_index, T::ECS4_TAG_INDEX, tag_occupancy); }
+
         template <typename T> bool g_has_cp(ecs_t* ecs, entity_t entity) { return g_has_cp(ecs, entity, T::ECS4_COMPONENT_INDEX); }
         template <typename T> T*   g_add_cp(ecs_t* ecs, entity_t entity) { return (T*)g_add_cp(ecs, entity, T::ECS4_COMPONENT_INDEX); }
         template <typename T> void g_rem_cp(ecs_t* ecs, entity_t entity) { g_rem_cp(ecs, entity, T::ECS4_COMPONENT_INDEX); }
@@ -69,19 +75,19 @@ namespace ncore
         template <typename T> void g_add_tag(ecs_t* ecs, entity_t entity) { g_add_tag(ecs, entity, (u16)T::ECS4_TAG_INDEX); }
         template <typename T> void g_rem_tag(ecs_t* ecs, entity_t entity) { g_rem_tag(ecs, entity, (u16)T::ECS4_TAG_INDEX); }
 
-        // Iterator
+        // Iterator (will only iterate over entities in the archetype of the blueprint entity)
         struct en_iterator_t
         {
-            en_iterator_t(ecs_t* ecs);
-            en_iterator_t(ecs_t* ecs, entity_t blueprint_entity);
+            en_iterator_t(ecs_t* ecs, u16 archetype_index, u64 cp_occupancy, u32 tag_occupancy);
 
             // Example:
-            //     entity_t blueprint = g_create_entity(ecs);
-            //     g_add_cp<position_t>(ecs, blueprint);
-            //     g_add_cp<velocity_t>(ecs, blueprint);
-            //     g_add_tag<enemy_tag_t>(ecs, blueprint);
+            //     u64 cp_occupancy  = 0;
+            //     u32 tag_occupancy = 0;
+            //     g_mark_cp<position_t>(ecs, 0, cp_occupancy);
+            //     g_mark_cp<velocity_t>(ecs, 0, cp_occupancy);
+            //     g_mark_tag<enemy_tag_t>(ecs, 0, tag_occupancy);
             //
-            //     en_iterator_t iter(ecs, blueprint);
+            //     en_iterator_t iter(ecs, 0, cp_occupancy, tag_occupancy);
             //
             //     iter.begin();
             //     while (!iter.end())
@@ -91,10 +97,8 @@ namespace ncore
             //         iter.next();
             //     }
             //
-            //     g_destroy_entity(ecs, blueprint);
-            //
 
-            void        begin() { m_entity_index = find(0); }
+            void        begin();
             inline void next() { m_entity_index = m_entity_index >= 0 ? find(m_entity_index + 1) : -1; }
             inline bool end() const { return m_entity_index < 0; }
             entity_t    entity() const;
@@ -102,11 +106,12 @@ namespace ncore
         private:
             s32 find(s32 entity_index) const;
 
-            ecs_t*       m_ecs;              // The ECS
-            archetype_t* m_archetype;        // The current archetype
-            entity_t     m_entity_reference; // Current entity reference
-            s32          m_entity_index;     // Current entity index
-            u8           m_archetype_index;  // The current archetype index
+            ecs_t*       m_ecs;               // The ECS
+            archetype_t* m_archetype;         //
+            u8           m_archetype_index;   //
+            u64          m_ref_cp_occupancy;  //
+            u32          m_ref_tag_occupancy; //
+            i32          m_entity_index;      // Current entity index
         };
     } // namespace necs4
 } // namespace ncore
