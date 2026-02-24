@@ -1,39 +1,17 @@
 #include "ccore/c_target.h"
 #include "ccore/c_allocator.h"
+#include "ccore/c_array.h"
 #include "ccore/c_arena.h"
 #include "ccore/c_bin.h"
 #include "ccore/c_debug.h"
 #include "ccore/c_duomap1.h"
 #include "ccore/c_math.h"
 #include "ccore/c_memory.h"
-#include "cbase/c_integer.h"
 
 #include "cecs/c_ecs4.h"
 
 namespace ncore
 {
-    template <typename T> void g_array_insert(T* array, u16& count, u32 max_count, u32 index, T const& value)
-    {
-        ASSERT(count < max_count);
-        ASSERT(index <= count);
-        for (u32 i = count; i > index; --i)
-        {
-            array[i] = array[i - 1];
-        }
-        array[index] = value;
-        count++;
-    }
-
-    template <typename T> void g_array_remove(T* array, u16& count, u16 max_count, u32 index)
-    {
-        ASSERT(index < count);
-        for (u32 i = index; i < count - 1; ++i)
-        {
-            array[i] = array[i + 1];
-        }
-        count--;
-    }
-
     namespace necs4
     {
         // ecs4: Entity Component System, version 4
@@ -325,13 +303,13 @@ namespace ncore
                     occupancy = occupancy | bit_mask;
 
                     // find local component index by counting bits before 'bit_index'
-                    const s32 cp_index = (s32)math::countBits(occupancy & (bit_mask - 1));
+                    const u16 cp_index = (u16)math::countBits(occupancy & (bit_mask - 1));
 
                     // store component reference
                     u16* cp_reference_array = (u16*)archetype->m_cp_reference->m_base;
                     u16* cp_references      = cp_reference_array + (entity_index * archetype->m_per_entity_cps);
                     u16  cp_reference       = (u16)nbin16::ptr2idx(cp_bin, cp_ptr);
-                    g_array_insert(cp_references, num_components, archetype->m_per_entity_cps, cp_index, cp_reference);
+                    g_array_insert(cp_references, archetype->m_per_entity_cps, num_components, cp_index, cp_reference);
 
                     return (byte*)cp_ptr;
                 }
@@ -350,7 +328,7 @@ namespace ncore
                 occupancy          = occupancy & (~bit_mask);
 
                 // find local component index by counting bits before 'bit_index'
-                const s32 cp_index = (s32)math::countBits(occupancy & (bit_mask - 1));
+                const u16 cp_index = (u16)math::countBits(occupancy & (bit_mask - 1));
 
                 nbin16::bin_t* cp_bin = archetype->m_cp_bins[component_type_index];
                 ASSERT(cp_bin != nullptr);
@@ -362,7 +340,7 @@ namespace ncore
                 nbin16::free(cp_bin, cp_ptr);
 
                 // remove component reference from the array
-                g_array_remove(cp_references, num_components, archetype->m_per_entity_cps, cp_index);
+                g_remove(cp_references, archetype->m_per_entity_cps, num_components, cp_index);
             }
         }
 
