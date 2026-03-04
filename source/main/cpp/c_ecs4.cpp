@@ -104,9 +104,9 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
-        // ecs archetype (112 bytes), maximum of 65536 entities per archetype
+        // ecs archetype (224 bytes), maximum of 65536 entities per archetype
         // --------------------------------------------------------------------------------------------------------
-#define ECS_archetype_MAX_ENTITIES 65536
+#define ECS_ARCHETYPE_MAX_ENTITIES 65536
 
         struct archetype_t
         {
@@ -151,17 +151,13 @@ namespace ncore
             ASSERT(max_cps_per_entity <= 64);    //
             ASSERT(max_tags_per_entity <= 32);   // sanity check
 
-            // tags per entity is either 8, 16 or 32 (1, 2 or 4 bytes)
-            // adjust max_tags_per_entity accordingly:
             max_tags_per_entity = math::alignUp(max_tags_per_entity, 8);
-            max_tags_per_entity = math::min(max_tags_per_entity, (u16)32);
-            max_tags_per_entity = max_tags_per_entity == 24 ? 32 : max_tags_per_entity;
 
             // calculate the address space to reserve for all arenas
             const u32 page_size       = v_alloc_get_page_size();
             const u8  page_size_shift = v_alloc_get_page_size_shift();
 
-            const int_t max_entities              = ECS_archetype_MAX_ENTITIES;
+            const int_t max_entities              = ECS_ARCHETYPE_MAX_ENTITIES;
             const int_t global_to_local_cp_size   = sizeof(u16) * max_global_cp_types;
             const int_t global_to_local_tg_size   = sizeof(u8) * max_global_tag_types;
             const int_t arenas_size               = sizeof(arena_t) * 3;
@@ -493,12 +489,12 @@ namespace ncore
             ecs->m_archetypes[archetype_index] = archetype;
         }
 
-        ecs_t* g_create_ecs()
+        ecs_t* g_create_ecs(u16 max_archetypes)
         {
             const u8  page_size_shift = v_alloc_get_page_size_shift();
             const u32 page_size       = (u32)1 << page_size_shift;
 
-            const int_t ecs_size = math::alignUp(sizeof(ecs_t) + (sizeof(archetype_t*) * 256), page_size);
+            const int_t ecs_size = math::alignUp(sizeof(ecs_t) + (sizeof(archetype_t*) * max_archetypes), page_size);
 
             void* base_address = v_alloc_reserve(ecs_size);
             if (base_address == nullptr)
@@ -511,7 +507,7 @@ namespace ncore
 
             ecs_t* ecs                 = (ecs_t*)base_address;
             ecs->m_page_size_shift     = page_size_shift;
-            ecs->m_archetypes_capacity = 256;
+            ecs->m_archetypes_capacity = max_archetypes;
             ecs->m_archetypes          = (archetype_t**)(ecs + 1);
 
             // initialize archetypes array
@@ -672,6 +668,11 @@ namespace ncore
                     {
                         case 8: cur_tag_occupancy = ((u8*)m_archetype->m_tags->m_base)[entity_index]; break;
                         case 16: cur_tag_occupancy = ((u16*)m_archetype->m_tags->m_base)[entity_index]; break;
+                        case 24:
+                            cur_tag_occupancy = m_archetype->m_tags->m_base[entity_index];
+                            cur_tag_occupancy = (cur_tag_occupancy << 8) | m_archetype->m_tags->m_base[entity_index + 1];
+                            cur_tag_occupancy = (cur_tag_occupancy << 8) | m_archetype->m_tags->m_base[entity_index + 2];
+                            break;
                         case 32: cur_tag_occupancy = ((u32*)m_archetype->m_tags->m_base)[entity_index]; break;
                     }
                     if ((cur_tag_occupancy & m_ref_tag_occupancy) == m_ref_tag_occupancy)
