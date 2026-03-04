@@ -104,13 +104,12 @@ namespace ncore
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
         // --------------------------------------------------------------------------------------------------------
-        // ecs archetype (112 bytes), maximum of 65536 entities per archetype
+        // ecs archetype (14*16 = 224 bytes), maximum of 65536 entities per archetype
         // --------------------------------------------------------------------------------------------------------
 #define ECS_archetype_MAX_ENTITIES 65536
 
         struct archetype_t
         {
-            DCORE_CLASS_PLACEMENT_NEW_DELETE
             u16*            m_global_to_local_cp_type;  // map global component type index to local component type index
             u8*             m_global_to_local_tag_type; // map global tag type index to local tag type index
             nbin16::bin_t** m_cp_bins;                  // array of component bins (max 64)
