@@ -33,7 +33,7 @@ namespace ncore
     }
 
         // Create and Destroy ECS
-        ecs_t* g_create_ecs();
+        ecs_t* g_create_ecs(u16 max_archetypes = 256);
         void   g_destroy_ecs(ecs_t* ecs);
 
         // Archetype registration
