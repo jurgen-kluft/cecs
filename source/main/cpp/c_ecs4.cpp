@@ -132,7 +132,7 @@ namespace ncore
             arena_t* m_bin2;                     // '1' bit = alive entity, '0' bit = free entity (65536 bits = 8 KB)
         };
 
-        static void s_initialize_archetype(archetype_t* archetype, u16 max_cps_per_entity, u16 max_global_cp_types, u16 max_tags_per_entity, u16 max_global_tag_types)
+        static void s_initialize_archetype(archetype_t* archetype, u8 max_cps_per_entity, u16 max_global_cp_types, u8 max_tags_per_entity, u16 max_global_tag_types)
         {
             ASSERT(max_global_cp_types < 2048);  // sanity
             ASSERT(max_global_tag_types <= 255); // u8 is used for mapping
@@ -407,7 +407,7 @@ namespace ncore
             archetype_t* m_archetypes; // array of archetype pointers
         };
 
-        void g_register_archetype(ecs_t* ecs, u8 archetype_index, u16 components_per_entity, u16 max_global_component_types, u16 tags_per_entity, u16 max_global_tag_types)
+        void g_register_archetype(ecs_t* ecs, u8 archetype_index, u8 components_per_entity, u16 max_global_component_types, u8 tags_per_entity, u16 max_global_tag_types)
         {
             ASSERT(archetype_index < ecs->m_archetypes_capacity);
             archetype_t* archetype = &ecs->m_archetypes[archetype_index];
@@ -494,28 +494,6 @@ namespace ncore
             return s_get_component(archetype, g_entity_index(entity), (u16)cp_index);
         }
 
-        void g_mark_cp(ecs_t* ecs, u8 archetype_index, u32 cp_index, u64& cp_occupancy)
-        {
-            archetype_t* archetype = &ecs->m_archetypes[archetype_index];
-            if (archetype == nullptr)
-                return;
-            ASSERT(cp_index < archetype->m_max_global_cp_types);
-            const u16 component_type_index = archetype->m_global_to_local_cp_type[cp_index];
-            ASSERT(component_type_index != 0xFFFF);
-            cp_occupancy |= ((u64)1 << component_type_index);
-        }
-
-        void g_mark_tag(ecs_t* ecs, u8 archetype_index, u16 tg_index, u32& tag_occupancy)
-        {
-            archetype_t* archetype = &ecs->m_archetypes[archetype_index];
-            if (archetype == nullptr)
-                return;
-            ASSERT(tg_index < archetype->m_per_entity_tags);
-            const u8 tag_type_index = archetype->m_global_to_local_tag_type[tg_index];
-            ASSERT(tag_type_index != 0xFF);
-            tag_occupancy |= ((u32)1 << tag_type_index);
-        }
-
         // Tags
         bool g_has_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
@@ -538,20 +516,39 @@ namespace ncore
             s_rem_tag(archetype, entity, tg_index);
         }
 
-        en_iterator_t::en_iterator_t(ecs_t* ecs, u8 archetype_index, u64 cp_occupancy, u32 tag_occupancy)
+        en_iterator_t::en_iterator_t(ecs_t* ecs, u8 archetype_index)
             : m_ecs(ecs)
             , m_archetype(nullptr)
-            , m_ref_cp_occupancy(cp_occupancy)
-            , m_ref_tag_occupancy(tag_occupancy)
+            , m_ref_cp_occupancy(0)
+            , m_ref_tag_occupancy(0)
             , m_entity_index(-1)
         {
             m_archetype_index   = archetype_index;
             m_archetype         = &ecs->m_archetypes[m_archetype_index];
-            m_ref_cp_occupancy  = cp_occupancy;
-            m_ref_tag_occupancy = tag_occupancy;
         }
 
         entity_t en_iterator_t::entity() const { return m_entity_index >= 0 ? s_entity_make(0, m_archetype_index, m_entity_index) : ECS_ENTITY_NULL; }
+
+        void en_iterator_t::mark_cp(u32 cp_index)
+        {
+            if (m_archetype == nullptr)
+                return;
+            ASSERT(cp_index < m_archetype->m_max_global_cp_types);
+            const u16 component_type_index = m_archetype->m_global_to_local_cp_type[cp_index];
+            ASSERT(component_type_index != 0xFFFF);
+            m_ref_cp_occupancy |= ((u64)1 << component_type_index);
+        }
+
+        void en_iterator_t::mark_tag(u16 tg_index)
+        {
+            if (m_archetype == nullptr)
+                return;
+            ASSERT(tg_index < m_archetype->m_per_entity_tags);
+            const u8 tag_type_index = m_archetype->m_global_to_local_tag_type[tg_index];
+            ASSERT(tag_type_index != 0xFF);
+            m_ref_tag_occupancy |= ((u32)1 << tag_type_index);
+        }
+
 
         void en_iterator_t::begin()
         {

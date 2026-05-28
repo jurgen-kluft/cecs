@@ -301,13 +301,11 @@ UNITTEST_SUITE_BEGIN(ecs4)
             g_add_tag<enemy_tag_t>(ecs, e03);
 
             {
-                u64 cp_occupancy  = 0;
-                u32 tag_occupancy = 0;
-                g_mark_cp<u8_t>(ecs, 0, cp_occupancy);
-                g_mark_cp<position_t>(ecs, 0, cp_occupancy);
-                g_mark_tag<enemy_tag_t>(ecs, 0, tag_occupancy);
-
-                en_iterator_t iter(ecs, 0, cp_occupancy, tag_occupancy);
+                en_iterator_t iter(ecs, 0);
+                
+                iter.mark_cp<u8_t>();
+                iter.mark_cp<position_t>();
+                iter.mark_tag<enemy_tag_t>();
 
                 iter.begin();
                 while (!iter.end())
@@ -324,12 +322,10 @@ UNITTEST_SUITE_BEGIN(ecs4)
             }
 
             {
-                u64 cp_occupancy  = 0;
-                u32 tag_occupancy = 0;
-                g_mark_cp<velocity_t>(ecs, 0, cp_occupancy);
-                g_mark_tag<enemy_tag_t>(ecs, 0, tag_occupancy);
+                en_iterator_t iter(ecs, 0);
 
-                en_iterator_t iter(ecs, 0, cp_occupancy, tag_occupancy);
+                iter.mark_cp<velocity_t>();
+                iter.mark_tag<enemy_tag_t>();
 
                 iter.begin();
                 while (!iter.end())
@@ -346,7 +342,7 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
             {
                 // Iterate all the entities of the archetype index 0
-                en_iterator_t iter(ecs, 0, 0, 0);
+                en_iterator_t iter(ecs, 0);
 
                 s32 index = 0;
                 iter.begin();
