@@ -4,7 +4,7 @@
 #include "ccore/c_arena.h"
 #include "ccore/c_bin.h"
 #include "ccore/c_debug.h"
-#include "ccore/c_duomap1.h"
+#include "ccore/c_statevec.h"
 #include "ccore/c_math.h"
 #include "ccore/c_memory.h"
 
@@ -350,7 +350,7 @@ namespace ncore
             if (archetype->m_alive_count < archetype->m_free_index)
             {
                 // The hierarchical duomap can be used to find a free entity index
-                entity_index = nduomap18::find0_and_set(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, narena::base_ptr_as<u64>(archetype->m_bin2), archetype->m_free_index);
+                entity_index = nstatevec18::alloc(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, narena::base_ptr_as<u64>(archetype->m_bin2), archetype->m_free_index);
 
                 occupancy_array = narena::base_ptr_as<u64>(archetype->m_cp_occupancy);
                 reference_array = narena::base_ptr_as<u16>(archetype->m_cp_reference);
@@ -367,7 +367,7 @@ namespace ncore
                 reference_array = narena::base_ptr_as<u16>(archetype->m_cp_reference);
                 tags_array      = narena::base_ptr_as<u8>(archetype->m_tags);
 
-                nduomap18::tick_lazy(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, narena::base_ptr_as<u64>(archetype->m_bin2), archetype->m_free_index, entity_index);
+                nstatevec18::tick_used_lazy(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, narena::base_ptr_as<u64>(archetype->m_bin2), archetype->m_free_index, entity_index);
             }
 
             *occupancy_array = 0;
@@ -391,7 +391,7 @@ namespace ncore
                 occupancy = occupancy & (~((u64)1 << bin_index));
             }
 
-            nduomap18::clr(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, narena::base_ptr_as<u64>(archetype->m_bin2), archetype->m_free_index, entity_index);
+            nstatevec18::set_free(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, narena::base_ptr_as<u64>(archetype->m_bin2), archetype->m_free_index, entity_index);
 
             archetype->m_alive_count--;
         }
@@ -517,8 +517,7 @@ namespace ncore
         }
 
         en_iterator_t::en_iterator_t(ecs_t* ecs, u8 archetype_index)
-            : m_ecs(ecs)
-            , m_archetype(nullptr)
+            : m_archetype(nullptr)
             , m_ref_cp_occupancy(0)
             , m_ref_tag_occupancy(0)
             , m_entity_index(-1)
@@ -561,7 +560,7 @@ namespace ncore
             if (m_ref_cp_occupancy == 0 && m_ref_tag_occupancy == 0)
             {
                 if (entity_index >= 0)
-                    entity_index = nduomap18::find1_after(&m_archetype->m_free_bin0, m_archetype->m_free_bin1, &m_archetype->m_alive_bin0, m_archetype->m_alive_bin1, narena::base_ptr_as<u64>(m_archetype->m_bin2), m_archetype->m_free_index, entity_index);
+                    entity_index = nstatevec18::find_used_after(&m_archetype->m_free_bin0, m_archetype->m_free_bin1, &m_archetype->m_alive_bin0, m_archetype->m_alive_bin1, narena::base_ptr_as<u64>(m_archetype->m_bin2), m_archetype->m_free_index, entity_index);
                 return entity_index;
             }
 
@@ -585,7 +584,7 @@ namespace ncore
                     if ((cur_tag_occupancy & m_ref_tag_occupancy) == m_ref_tag_occupancy)
                         return entity_index;
                 }
-                entity_index = nduomap18::find1_after(&m_archetype->m_free_bin0, m_archetype->m_free_bin1, &m_archetype->m_alive_bin0, m_archetype->m_alive_bin1, narena::base_ptr_as<u64>(m_archetype->m_bin2), m_archetype->m_free_index, entity_index + 1);
+                entity_index = nstatevec18::find_used_after(&m_archetype->m_free_bin0, m_archetype->m_free_bin1, &m_archetype->m_alive_bin0, m_archetype->m_alive_bin1, narena::base_ptr_as<u64>(m_archetype->m_bin2), m_archetype->m_free_index, entity_index + 1);
             }
             return entity_index;
         }

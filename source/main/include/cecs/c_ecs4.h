@@ -110,7 +110,6 @@ namespace ncore
         private:
             s32 find(s32 entity_index) const;
 
-            ecs_t*       m_ecs;               // The ECS
             archetype_t* m_archetype;         //
             u8           m_archetype_index;   //
             u64          m_ref_cp_occupancy;  //
