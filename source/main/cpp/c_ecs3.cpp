@@ -2,7 +2,8 @@
 #include "ccore/c_allocator.h"
 #include "ccore/c_debug.h"
 #include "ccore/c_memory.h"
-#include "cbase/c_duomap.h"
+#include "ccore/c_bitvec.h"
+#include "ccore/c_statevec.h"
 #include "cbase/c_integer.h"
 
 #include "cecs/c_ecs3.h"
@@ -37,7 +38,13 @@ namespace ncore
             u32*                   m_per_entity_component_occupancy;
             u32*                   m_per_entity_tags;
             component_container_t* m_component_containers;
-            duomap_t               m_entity_state;
+            u64*                   m_entity_state_free_l0;
+            u64*                   m_entity_state_free_l1;
+            u64*                   m_entity_state_free_l2;
+            u64*                   m_entity_state_used_l0;
+            u64*                   m_entity_state_used_l1;
+            u64*                   m_entity_state_used_l2;
+            u64*                   m_entity_state_l3;
         };
 
         static void s_teardown(alloc_t* allocator, component_container_t* container)
@@ -66,8 +73,18 @@ namespace ncore
 
             ecs->m_component_containers = g_allocate_array_and_memset<component_container_t>(allocator, max_component_types, 0);
 
-            duomap_t::config_t cfg = duomap_t::config_t::compute(max_entities);
-            ecs->m_entity_state.init_all_free(cfg, allocator);
+            nbitvec::layout64_t cfg;
+            nbitvec::compute_l4(max_entities, cfg);
+
+            ecs->m_entity_state_free_l0 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin0, 0);
+            ecs->m_entity_state_free_l1 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin1, 0);
+            ecs->m_entity_state_free_l2 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin2, 0);
+
+            ecs->m_entity_state_used_l0 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin0, 0);
+            ecs->m_entity_state_used_l1 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin1, 0);
+            ecs->m_entity_state_used_l2 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin2, 0);
+
+            ecs->m_entity_state_l3 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin3, 0);
 
             return ecs;
         }
@@ -88,14 +105,22 @@ namespace ncore
             g_deallocate_array(allocator, ecs->m_per_entity_component_occupancy);
             g_deallocate_array(allocator, ecs->m_per_entity_generation);
 
-            ecs->m_entity_state.release(allocator);
+            g_deallocate_array(allocator, ecs->m_entity_state_free_l0);
+            g_deallocate_array(allocator, ecs->m_entity_state_free_l1);
+            g_deallocate_array(allocator, ecs->m_entity_state_free_l2);
+
+            g_deallocate_array(allocator, ecs->m_entity_state_used_l0);
+            g_deallocate_array(allocator, ecs->m_entity_state_used_l1);
+            g_deallocate_array(allocator, ecs->m_entity_state_used_l2);
+
+            g_deallocate_array(allocator, ecs->m_entity_state_l3);
 
             g_deallocate(allocator, ecs);
         }
 
         entity_t g_create_entity(ecs_t* ecs)
         {
-            s32 const index = ecs->m_entity_state.find_free_and_set_used();
+            s32 const index = nstatevec24::alloc(ecs->m_entity_state_free_l0, ecs->m_entity_state_free_l1, ecs->m_entity_state_free_l2, ecs->m_entity_state_used_l0, ecs->m_entity_state_used_l1, ecs->m_entity_state_used_l2, ecs->m_entity_state_l3, ecs->m_max_entities);
             if (index >= 0)
             {
                 // Clear the component occupancy
@@ -119,7 +144,12 @@ namespace ncore
             entity_generation_t const gen_id = g_entity_generation(e);
             entity_generation_t const cur_id = ecs->m_per_entity_generation[g_entity_index(e)];
             if (gen_id == cur_id)
-                ecs->m_entity_state.set_free(g_entity_index(e));
+            {
+                //ecs->m_entity_state.set_free();
+                const u32 index = g_entity_index(e);
+                nstatevec24::free(ecs->m_entity_state_free_l0, ecs->m_entity_state_free_l1, ecs->m_entity_state_free_l2, ecs->m_entity_state_used_l0, ecs->m_entity_state_used_l1, ecs->m_entity_state_used_l2, ecs->m_entity_state_l3, index);
+                ecs->m_per_entity_generation[g_entity_index(e)]++;
+            }
         }
 
         bool g_register_component(ecs_t* ecs, u32 max_components, u32 cp_index, s32 cp_sizeof, s32 cp_alignof, const char* cp_name)
@@ -272,7 +302,7 @@ namespace ncore
         {
             if (m_entity_reference < 0)
             {
-                return entity_index >= 0 ? m_ecs->m_entity_state.next_used_up(entity_index) : -1;
+                return entity_index >= 0 ? nstatevec24::find_used_after(m_ecs->m_entity_state_free_l0, m_ecs->m_entity_state_free_l1, m_ecs->m_entity_state_free_l2, m_ecs->m_entity_state_used_l0, m_ecs->m_entity_state_used_l1, m_ecs->m_entity_state_used_l2, m_ecs->m_entity_state_l3, entity_index, m_ecs->m_max_entities) : -1;
             }
 
             // See if this entity has all the components and tags that we are looking for by taking the
@@ -280,7 +310,7 @@ namespace ncore
             u32 const* ref_component_occupancy = &m_ecs->m_per_entity_component_occupancy[g_entity_index(m_entity_reference) * m_ecs->m_component_words_per_entity];
             u32 const* ref_tag_occupancy       = &m_ecs->m_per_entity_tags[g_entity_index(m_entity_reference) * m_ecs->m_tag_words_per_entity];
 
-            entity_index = m_ecs->m_entity_state.next_used_up(entity_index);
+            entity_index = nstatevec24::find_used_after(m_ecs->m_entity_state_free_l0, m_ecs->m_entity_state_free_l1, m_ecs->m_entity_state_free_l2, m_ecs->m_entity_state_used_l0, m_ecs->m_entity_state_used_l1, m_ecs->m_entity_state_used_l2, m_ecs->m_entity_state_l3, entity_index, m_ecs->m_max_entities);
             while (entity_index >= 0)
             {
                 if (entity_index != m_entity_reference)
@@ -312,7 +342,7 @@ namespace ncore
                             break;
                     }
                 }
-                entity_index = m_ecs->m_entity_state.next_used_up(entity_index + 1);
+                entity_index = nstatevec24::find_used_after(m_ecs->m_entity_state_free_l0, m_ecs->m_entity_state_free_l1, m_ecs->m_entity_state_free_l2, m_ecs->m_entity_state_used_l0, m_ecs->m_entity_state_used_l1, m_ecs->m_entity_state_used_l2, m_ecs->m_entity_state_l3, entity_index + 1, m_ecs->m_max_entities);
             }
 
             return entity_index;

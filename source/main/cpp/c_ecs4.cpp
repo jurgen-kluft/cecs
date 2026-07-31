@@ -205,7 +205,7 @@ namespace ncore
             const u64 bit_mask = ((u64)1 << component_type_index);
 
             bin16_t* cp_bin = &archetype->m_cp_bins[component_type_index];
-            ASSERT(cp_bin->m_bin != nullptr);
+            ASSERT(cp_bin->m_memory != nullptr);
 
             if (occupancy & bit_mask)
             {
@@ -256,7 +256,7 @@ namespace ncore
                 const u16 cp_index = (u16)math::countBits(occupancy & (bit_mask - 1));
 
                 bin16_t* cp_bin = &archetype->m_cp_bins[component_type_index];
-                ASSERT(cp_bin->m_bin != nullptr);
+                ASSERT(cp_bin->m_memory != nullptr);
 
                 u16*  cp_reference_array = narena::base_ptr_as<u16>(archetype->m_cp_reference);
                 u16*  cp_references      = cp_reference_array + (entity_index * archetype->m_per_entity_cps);
@@ -309,7 +309,7 @@ namespace ncore
                 const u16  cp_reference       = cp_references[cp_index];
 
                 bin16_t* cp_bin = &archetype->m_cp_bins[component_type_index];
-                ASSERT(cp_bin->m_bin != nullptr);
+                ASSERT(cp_bin->m_memory != nullptr);
 
                 return (byte*)bin_idx2ptr(cp_bin, cp_reference);
             }
