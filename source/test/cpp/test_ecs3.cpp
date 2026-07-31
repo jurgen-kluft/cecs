@@ -133,6 +133,7 @@ UNITTEST_SUITE_BEGIN(ecs3)
             g_register_component<position_t>(ecs, 512, "position");
 
             entity_t e01 = g_create_entity(ecs);
+            CHECK_EQUAL((u32)0, g_entity_index(e01));
 
             u8_t* cpa1 = g_add_cp<u8_t>(ecs, e01);
             CHECK_NOT_NULL(cpa1);
@@ -152,6 +153,7 @@ UNITTEST_SUITE_BEGIN(ecs3)
             g_destroy_entity(ecs, e01);
 
             g_unregister_component<u8_t>(ecs);
+            g_unregister_component<position_t>(ecs);
 
             g_destroy_ecs(ecs);
         }
@@ -271,8 +273,16 @@ UNITTEST_SUITE_BEGIN(ecs3)
 
             g_destroy_ecs(ecs);
         }
+    }
 
-        UNITTEST_TEST(iterator_basic)
+    UNITTEST_FIXTURE(iterator)
+    {
+        UNITTEST_ALLOCATOR;
+
+        UNITTEST_FIXTURE_SETUP() {}
+        UNITTEST_FIXTURE_TEARDOWN() {}
+
+        UNITTEST_TEST(basic)
         {
             ecs_t* ecs = g_create_ecs(Allocator, 1024, 256, 64);
 

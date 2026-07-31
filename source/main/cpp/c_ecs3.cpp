@@ -67,24 +67,24 @@ namespace ncore
             ecs->m_component_words_per_entity = (max_component_types + 31) >> 5;
             ecs->m_tag_words_per_entity       = (max_tags + 31) >> 5;
 
-            ecs->m_per_entity_generation          = g_allocate_array_and_memset<byte>(allocator, max_entities, 0);
-            ecs->m_per_entity_component_occupancy = g_allocate_array_and_memset<u32>(allocator, max_entities * ecs->m_component_words_per_entity, 0);
-            ecs->m_per_entity_tags                = g_allocate_array_and_memset<u32>(allocator, max_entities * ecs->m_tag_words_per_entity, 0);
+            ecs->m_per_entity_generation          = g_allocate_array_and_clear<byte>(allocator, max_entities);
+            ecs->m_per_entity_component_occupancy = g_allocate_array_and_clear<u32>(allocator, max_entities * ecs->m_component_words_per_entity);
+            ecs->m_per_entity_tags                = g_allocate_array_and_clear<u32>(allocator, max_entities * ecs->m_tag_words_per_entity);
 
-            ecs->m_component_containers = g_allocate_array_and_memset<component_container_t>(allocator, max_component_types, 0);
+            ecs->m_component_containers = g_allocate_array_and_clear<component_container_t>(allocator, max_component_types);
 
             nbitvec::layout64_t cfg;
             nbitvec::compute_l4(max_entities, cfg);
 
-            ecs->m_entity_state_free_l0 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin0, 0);
-            ecs->m_entity_state_free_l1 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin1, 0);
-            ecs->m_entity_state_free_l2 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin2, 0);
+            ecs->m_entity_state_free_l0 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin0, 0xFFFFFFFF);
+            ecs->m_entity_state_free_l1 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin1, 0xFFFFFFFF);
+            ecs->m_entity_state_free_l2 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin2, 0xFFFFFFFF);
 
-            ecs->m_entity_state_used_l0 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin0, 0);
-            ecs->m_entity_state_used_l1 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin1, 0);
-            ecs->m_entity_state_used_l2 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin2, 0);
+            ecs->m_entity_state_used_l0 = g_allocate_array_and_clear<u64>(allocator, cfg.m_bin0);
+            ecs->m_entity_state_used_l1 = g_allocate_array_and_clear<u64>(allocator, cfg.m_bin1);
+            ecs->m_entity_state_used_l2 = g_allocate_array_and_clear<u64>(allocator, cfg.m_bin2);
 
-            ecs->m_entity_state_l3 = g_allocate_array_and_memset<u64>(allocator, cfg.m_bin3, 0);
+            ecs->m_entity_state_l3 = g_allocate_array_and_clear<u64>(allocator, cfg.m_bin3);
 
             return ecs;
         }

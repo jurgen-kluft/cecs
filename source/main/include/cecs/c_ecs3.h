@@ -42,7 +42,7 @@ namespace ncore
     }
 
         // Create and Destroy ECS
-        ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities, u32 max_components, u32 max_tags);
+        ecs_t* g_create_ecs(alloc_t* allocator, u32 max_entities, u32 max_component_types, u32 max_tags);
         void   g_destroy_ecs(ecs_t* ecs);
 
         // Create and Destroy Entity
