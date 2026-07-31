@@ -117,6 +117,7 @@ namespace ncore
             arena_t* m_cp_occupancy;             // component occupancy bits per entity (u64)
             arena_t* m_cp_reference;             // component reference array (u16[])
             arena_t* m_tags;                     // tag bits array (u8, u16 or u32)
+            arena_t* m_generation;               // generation id per entity (u8)
             u16      m_max_global_cp_types;      // maximum number of global component types
             u16      m_max_global_tag_types;     // maximum number of global tag types
             u16      m_num_cps;                  // current number of component bins
@@ -129,7 +130,7 @@ namespace ncore
             u64      m_alive_bin0;               // 16 * 64 * 64 = 65536 entities
             u64*     m_free_bin1;                // track the 0 bits in m_entity_bin2 (16 * sizeof(u64) = 128 bytes)
             u64*     m_alive_bin1;               // track the 1 bits in m_entity_bin2 (16 * sizeof(u64) = 128 bytes)
-            arena_t* m_bin2;                     // '1' bit = alive entity, '0' bit = free entity (65536 bits = 8 KB)
+            u64*     m_bin2;                     // '1' bit = alive entity, '0' bit = free entity (65536 bits = 8 KB)
         };
 
         static void s_initialize_archetype(archetype_t* archetype, u8 max_cps_per_entity, u16 max_global_cp_types, u8 max_tags_per_entity, u16 max_global_tag_types)
@@ -142,12 +143,13 @@ namespace ncore
             max_tags_per_entity = math::alignUp(max_tags_per_entity, 8);
 
             archetype->m_archetype_arena          = narena::new_arena(16 * cKB, 12 * cKB);
-            archetype->m_global_to_local_cp_type  = g_allocate_and_clear<u16>(archetype->m_archetype_arena, max_global_cp_types);
-            archetype->m_global_to_local_tag_type = g_allocate_and_clear<u8>(archetype->m_archetype_arena, max_global_tag_types);
+            archetype->m_global_to_local_cp_type  = g_allocate_array_and_fill<u16>(archetype->m_archetype_arena, max_global_cp_types, 0xFFFFFFFF);
+            archetype->m_global_to_local_tag_type = g_allocate_array_and_fill<u8>(archetype->m_archetype_arena, max_global_tag_types, 0xFFFFFFFF);
             archetype->m_cp_occupancy             = narena::new_arena((int_t)sizeof(u64) * ECS_ARCHETYPE_MAX_ENTITIES, 0);
             archetype->m_cp_reference             = narena::new_arena((int_t)sizeof(u16) * max_cps_per_entity * ECS_ARCHETYPE_MAX_ENTITIES, 0);
             archetype->m_tags                     = narena::new_arena((int_t)((max_tags_per_entity * ECS_ARCHETYPE_MAX_ENTITIES) >> 3), 0);
-            archetype->m_cp_bins                  = g_allocate_and_clear<bin16_t>(archetype->m_archetype_arena, 64);
+            archetype->m_generation               = narena::new_arena((int_t)sizeof(u8) * ECS_ARCHETYPE_MAX_ENTITIES, 0);
+            archetype->m_cp_bins                  = g_allocate_array_and_clear<bin16_t>(archetype->m_archetype_arena, 64);
             archetype->m_max_global_cp_types      = (u16)max_global_cp_types;
             archetype->m_max_global_tag_types     = (u16)max_global_tag_types;
             archetype->m_per_entity_cps           = (u16)max_cps_per_entity;
@@ -156,18 +158,21 @@ namespace ncore
             archetype->m_alive_count              = 0;
 
             archetype->m_free_bin0  = D_U64_MAX;
-            archetype->m_alive_bin0 = D_U64_MAX;
-            archetype->m_free_bin1  = g_allocate<u64>(archetype->m_archetype_arena, 16);                            // track the 0 bits in m_entity_bin2 (16 * sizeof(u64) = 128 bytes)
-            archetype->m_alive_bin1 = g_allocate<u64>(archetype->m_archetype_arena, 16);                            // track the 1 bits in m_entity_bin2 (16 * sizeof(u64) = 128 bytes)
-            archetype->m_bin2       = narena::new_arena((int_t)(ECS_ARCHETYPE_MAX_ENTITIES >> 6) * sizeof(u64), 0); // '1' bit = alive entity, '0' bit = free entity (65536 bits = 8 KB)
+            archetype->m_alive_bin0 = 0;
+            archetype->m_free_bin1  = g_allocate_array_and_fill<u64>(archetype->m_archetype_arena, 64, 0XFFFFFFFF); // track the 0 bits in m_entity_bin2 (16 * sizeof(u64) = 128 bytes)
+            archetype->m_alive_bin1 = g_allocate_array_and_fill<u64>(archetype->m_archetype_arena, 16, 0);          // track the 1 bits in m_entity_bin2 (16 * sizeof(u64) = 128 bytes)
+            archetype->m_bin2       = g_allocate_array_and_fill<u64>(archetype->m_archetype_arena, 16 * 64, 0);     // '1' bit = alive entity, '0' bit = free entity (65536 bits = 8 KB)
         }
 
         static void s_destroy(archetype_t* archetype)
         {
+            for (u16 i = 0; i < archetype->m_num_cps; ++i)
+                bin_destroy(&archetype->m_cp_bins[i]);
+
             narena::destroy(archetype->m_cp_occupancy);
             narena::destroy(archetype->m_cp_reference);
             narena::destroy(archetype->m_tags);
-            narena::destroy(archetype->m_bin2);
+            narena::destroy(archetype->m_generation);
 
             narena::destroy(archetype->m_archetype_arena);
         }
@@ -175,6 +180,9 @@ namespace ncore
         static void s_register_component_type(archetype_t* archetype, u16 global_cp_type_index, u32 sizeof_component)
         {
             ASSERT(global_cp_type_index < archetype->m_max_global_cp_types);
+            ASSERT(archetype->m_num_cps < 64);
+            if (global_cp_type_index >= archetype->m_max_global_cp_types || archetype->m_num_cps >= 64)
+                return;
             if (archetype->m_global_to_local_cp_type[global_cp_type_index] != 0xFFFF)
                 return;
             archetype->m_global_to_local_cp_type[global_cp_type_index] = (u16)archetype->m_num_cps;
@@ -185,7 +193,10 @@ namespace ncore
 
         static void s_register_tag_type(archetype_t* archetype, u16 global_tag_type_index)
         {
+            ASSERT(global_tag_type_index < archetype->m_max_global_tag_types);
             ASSERT(archetype->m_num_tags < archetype->m_per_entity_tags);
+            if (global_tag_type_index >= archetype->m_max_global_tag_types || archetype->m_num_tags >= archetype->m_per_entity_tags)
+                return;
             if (archetype->m_global_to_local_tag_type[global_tag_type_index] != 0xFF)
                 return;
             archetype->m_global_to_local_tag_type[global_tag_type_index] = archetype->m_num_tags;
@@ -198,6 +209,8 @@ namespace ncore
             ASSERT(entity_index < archetype->m_free_index);
 
             const u16 component_type_index = archetype->m_global_to_local_cp_type[global_cp_type_index];
+            if (component_type_index == 0xFFFF)
+                return nullptr;
 
             u64* occupancy_array = narena::base_ptr_as<u64>(archetype->m_cp_occupancy);
             u64& occupancy       = occupancy_array[entity_index];
@@ -219,6 +232,9 @@ namespace ncore
             }
             else
             {
+                if (math::countBits(occupancy) >= archetype->m_per_entity_cps)
+                    return nullptr;
+
                 void* cp_ptr = bin_alloc(cp_bin);
                 if (cp_ptr != nullptr)
                 {
@@ -265,7 +281,7 @@ namespace ncore
                 bin_free(cp_bin, cp_ptr);
 
                 // remove component reference from the array
-                g_remove(cp_references, archetype->m_per_entity_cps, num_components, cp_index);
+                g_array_remove(cp_references, archetype->m_per_entity_cps, num_components, cp_index);
             }
         }
 
@@ -274,6 +290,8 @@ namespace ncore
             ASSERT(global_cp_type_index < archetype->m_max_global_cp_types);
             ASSERT(entity_index < archetype->m_free_index);
             const u16 component_type_index = archetype->m_global_to_local_cp_type[global_cp_type_index];
+            if (component_type_index == 0xFFFF)
+                return;
             s_free_local_component(archetype, entity_index, component_type_index);
         }
 
@@ -282,6 +300,8 @@ namespace ncore
             ASSERT(global_cp_type_index < archetype->m_max_global_cp_types);
             ASSERT(entity_index < archetype->m_free_index);
             const u16  component_type_index = archetype->m_global_to_local_cp_type[global_cp_type_index];
+            if (component_type_index == 0xFFFF)
+                return false;
             const u64* occupancy_array      = narena::base_ptr_as<const u64>(archetype->m_cp_occupancy);
             const u64  occupancy            = occupancy_array[entity_index];
             const u64  bit_mask             = ((u64)1 << component_type_index);
@@ -294,6 +314,8 @@ namespace ncore
             ASSERT(entity_index < archetype->m_free_index);
 
             const u16 component_type_index = archetype->m_global_to_local_cp_type[global_cp_type_index];
+            if (component_type_index == 0xFFFF)
+                return nullptr;
             const u64 bit_mask             = ((u64)1 << component_type_index);
 
             const u64* occupancy_array = narena::base_ptr_as<const u64>(archetype->m_cp_occupancy);
@@ -350,32 +372,46 @@ namespace ncore
             if (archetype->m_alive_count < archetype->m_free_index)
             {
                 // The hierarchical duomap can be used to find a free entity index
-                entity_index = nstatevec18::alloc(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, narena::base_ptr_as<u64>(archetype->m_bin2), archetype->m_free_index);
-
-                occupancy_array = narena::base_ptr_as<u64>(archetype->m_cp_occupancy);
-                reference_array = narena::base_ptr_as<u16>(archetype->m_cp_reference);
-                tags_array      = narena::base_ptr_as<u8>(archetype->m_tags);
-                occupancy_array = occupancy_array + (entity_index);
-                reference_array = reference_array + (entity_index * archetype->m_per_entity_cps);
-                tags_array      = tags_array + (entity_index * (math::alignUp(archetype->m_per_entity_tags, 8) >> 3));
+                entity_index = nstatevec18::alloc(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, archetype->m_bin2, archetype->m_free_index);
             }
             else
             {
+                if (archetype->m_free_index >= ECS_ARCHETYPE_MAX_ENTITIES)
+                    return -1;
                 entity_index = archetype->m_free_index++;
 
-                occupancy_array = narena::base_ptr_as<u64>(archetype->m_cp_occupancy);
-                reference_array = narena::base_ptr_as<u16>(archetype->m_cp_reference);
-                tags_array      = narena::base_ptr_as<u8>(archetype->m_tags);
+                nstatevec18::tick_used_lazy(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, archetype->m_bin2, archetype->m_free_index, entity_index);
 
-                nstatevec18::tick_used_lazy(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, narena::base_ptr_as<u64>(archetype->m_bin2), archetype->m_free_index, entity_index);
+                narena::commit(archetype->m_cp_occupancy, (entity_index + 1) * sizeof(u64));
+                narena::commit(archetype->m_cp_reference, (entity_index + 1) * archetype->m_per_entity_cps * sizeof(u16));
+                narena::commit(archetype->m_tags, (entity_index + 1) * (archetype->m_per_entity_tags >> 3));
+                narena::commit(archetype->m_generation, (entity_index + 1) * sizeof(u8));
             }
 
+            if (entity_index < 0)
+                return -1;
+
+            occupancy_array = narena::base_ptr_as<u64>(archetype->m_cp_occupancy) + entity_index;
+            reference_array = narena::base_ptr_as<u16>(archetype->m_cp_reference) + (entity_index * archetype->m_per_entity_cps);
+            tags_array      = narena::base_ptr_as<u8>(archetype->m_tags) + (entity_index * (archetype->m_per_entity_tags >> 3));
+
             *occupancy_array = 0;
-            g_memclr(tags_array, math::alignUp(archetype->m_per_entity_tags, 8) >> 3);
+            g_memclr(reference_array, archetype->m_per_entity_cps * sizeof(u16));
+            g_memclr(tags_array, archetype->m_per_entity_tags >> 3);
 
             archetype->m_alive_count++;
 
             return entity_index;
+        }
+
+        static bool s_is_alive(archetype_t const* archetype, entity_t entity)
+        {
+            const u32 entity_index = g_entity_index(entity);
+            if (entity_index >= archetype->m_free_index)
+                return false;
+            if (!nstatevec18::get(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, archetype->m_bin2, archetype->m_free_index, entity_index))
+                return false;
+            return narena::base_ptr_as<const u8>(archetype->m_generation)[entity_index] == g_entity_generation(entity);
         }
 
         static void s_destroy_entity(archetype_t* archetype, u32 entity_index)
@@ -391,7 +427,8 @@ namespace ncore
                 occupancy = occupancy & (~((u64)1 << bin_index));
             }
 
-            nstatevec18::set_free(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, narena::base_ptr_as<u64>(archetype->m_bin2), archetype->m_free_index, entity_index);
+            nstatevec18::set_free(&archetype->m_free_bin0, archetype->m_free_bin1, &archetype->m_alive_bin0, archetype->m_alive_bin1, archetype->m_bin2, archetype->m_free_index, entity_index);
+            narena::base_ptr_as<u8>(archetype->m_generation)[entity_index]++;
 
             archetype->m_alive_count--;
         }
@@ -407,9 +444,24 @@ namespace ncore
             archetype_t* m_archetypes; // array of archetype pointers
         };
 
+        static archetype_t* s_get_alive_archetype(ecs_t* ecs, entity_t entity)
+        {
+            if (g_entity_is_null(entity))
+                return nullptr;
+            const u8 archetype_index = g_entity_archetype_index(entity);
+            if (archetype_index >= ecs->m_archetypes_capacity)
+                return nullptr;
+            archetype_t* archetype = &ecs->m_archetypes[archetype_index];
+            if (archetype->m_archetype_arena == nullptr || !s_is_alive(archetype, entity))
+                return nullptr;
+            return archetype;
+        }
+
         void g_register_archetype(ecs_t* ecs, u8 archetype_index, u8 components_per_entity, u16 max_global_component_types, u8 tags_per_entity, u16 max_global_tag_types)
         {
             ASSERT(archetype_index < ecs->m_archetypes_capacity);
+            if (archetype_index >= ecs->m_archetypes_capacity)
+                return;
             archetype_t* archetype = &ecs->m_archetypes[archetype_index];
             if (archetype->m_archetype_arena != nullptr)
                 return;
@@ -422,98 +474,131 @@ namespace ncore
             arena_t*    arena    = narena::new_arena(ecs_size, ecs_size);
 
             ecs_t* ecs                 = g_allocate<ecs_t>(arena);
+            ecs->m_arena               = arena;
             ecs->m_archetypes_capacity = max_archetypes;
-            ecs->m_archetypes          = g_allocate_and_clear<archetype_t>(arena, max_archetypes);
+            ecs->m_archetypes          = g_allocate_array_and_clear<archetype_t>(arena, max_archetypes);
 
             return ecs;
         }
 
         void g_destroy_ecs(ecs_t* ecs)
         {
+            arena_t* arena = ecs->m_arena;
             for (u32 i = 0; i < ecs->m_archetypes_capacity; i++)
             {
                 archetype_t* archetype = &ecs->m_archetypes[i];
-                if (archetype != nullptr)
+                if (archetype->m_archetype_arena != nullptr)
                     s_destroy(archetype);
             }
-            narena::destroy(ecs->m_arena);
+            narena::destroy(arena);
         }
 
         entity_t g_create_entity(ecs_t* ecs, u8 archetype_index)
         {
+            if (archetype_index >= ecs->m_archetypes_capacity)
+                return ECS_ENTITY_NULL;
             archetype_t* archetype    = &ecs->m_archetypes[archetype_index];
+            if (archetype->m_archetype_arena == nullptr)
+                return ECS_ENTITY_NULL;
             const s32    entity_index = s_create_entity(archetype);
-            return s_entity_make(0, archetype_index, (entity_index_t)entity_index);
+            if (entity_index < 0)
+                return ECS_ENTITY_NULL;
+            const u8 generation = narena::base_ptr_as<const u8>(archetype->m_generation)[entity_index];
+            return s_entity_make(generation, archetype_index, (entity_index_t)entity_index);
         }
 
         void g_destroy_entity(ecs_t* ecs, entity_t e)
         {
+            if (g_entity_is_null(e))
+                return;
             const u8     archetype_index = g_entity_archetype_index(e);
+            if (archetype_index >= ecs->m_archetypes_capacity)
+                return;
             archetype_t* archetype       = &ecs->m_archetypes[archetype_index];
+            if (archetype->m_archetype_arena == nullptr || !s_is_alive(archetype, e))
+                return;
             s_destroy_entity(archetype, g_entity_index(e));
         }
 
         void g_register_component_type(ecs_t* ecs, u8 archetype_index, u16 cp_index, u32 cp_sizeof)
         {
+            if (archetype_index >= ecs->m_archetypes_capacity)
+                return;
             archetype_t* archetype = &ecs->m_archetypes[archetype_index];
-            if (archetype == nullptr)
+            if (archetype->m_archetype_arena == nullptr)
                 return;
             s_register_component_type(archetype, cp_index, cp_sizeof);
         }
 
         void g_register_tag_type(ecs_t* ecs, u8 archetype_index, u16 tg_index)
         {
+            if (archetype_index >= ecs->m_archetypes_capacity)
+                return;
             archetype_t* archetype = &ecs->m_archetypes[archetype_index];
-            if (archetype == nullptr)
+            if (archetype->m_archetype_arena == nullptr)
                 return;
             s_register_tag_type(archetype, tg_index);
         }
 
         bool g_has_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            const u8     archetype_index = g_entity_archetype_index(entity);
-            archetype_t* archetype       = &ecs->m_archetypes[archetype_index];
+            archetype_t* archetype = s_get_alive_archetype(ecs, entity);
+            if (archetype == nullptr || cp_index >= archetype->m_max_global_cp_types)
+                return false;
             return s_has_component(archetype, g_entity_index(entity), (u16)cp_index);
         }
         void* g_add_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            const u8     archetype_index = g_entity_archetype_index(entity);
-            archetype_t* archetype       = &ecs->m_archetypes[archetype_index];
+            archetype_t* archetype = s_get_alive_archetype(ecs, entity);
+            if (archetype == nullptr || cp_index >= archetype->m_max_global_cp_types)
+                return nullptr;
             return s_alloc_component(archetype, g_entity_index(entity), (u16)cp_index);
         }
         void g_rem_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            const u8     archetype_index = g_entity_archetype_index(entity);
-            archetype_t* archetype       = &ecs->m_archetypes[archetype_index];
+            archetype_t* archetype = s_get_alive_archetype(ecs, entity);
+            if (archetype == nullptr || cp_index >= archetype->m_max_global_cp_types)
+                return;
             s_free_component(archetype, g_entity_index(entity), (u16)cp_index);
         }
         void* g_get_cp(ecs_t* ecs, entity_t entity, u32 cp_index)
         {
-            const u8     archetype_index = g_entity_archetype_index(entity);
-            archetype_t* archetype       = &ecs->m_archetypes[archetype_index];
+            archetype_t* archetype = s_get_alive_archetype(ecs, entity);
+            if (archetype == nullptr || cp_index >= archetype->m_max_global_cp_types)
+                return nullptr;
             return s_get_component(archetype, g_entity_index(entity), (u16)cp_index);
         }
 
         // Tags
         bool g_has_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
-            const u8     archetype_index = g_entity_archetype_index(entity);
-            archetype_t* archetype       = &ecs->m_archetypes[archetype_index];
-            return s_has_tag(archetype, entity, tg_index);
+            archetype_t* archetype = s_get_alive_archetype(ecs, entity);
+            if (archetype == nullptr || tg_index >= archetype->m_max_global_tag_types)
+                return false;
+            const u8 tag_type_index = archetype->m_global_to_local_tag_type[tg_index];
+            if (tag_type_index == 0xFF)
+                return false;
+            return s_has_tag(archetype, entity, tag_type_index);
         }
 
         void g_add_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
-            const u8     archetype_index = g_entity_archetype_index(entity);
-            archetype_t* archetype       = &ecs->m_archetypes[archetype_index];
-            s_add_tag(archetype, entity, tg_index);
+            archetype_t* archetype = s_get_alive_archetype(ecs, entity);
+            if (archetype == nullptr || tg_index >= archetype->m_max_global_tag_types)
+                return;
+            const u8 tag_type_index = archetype->m_global_to_local_tag_type[tg_index];
+            if (tag_type_index != 0xFF)
+                s_add_tag(archetype, entity, tag_type_index);
         }
 
         void g_rem_tag(ecs_t* ecs, entity_t entity, u16 tg_index)
         {
-            const u8     archetype_index = g_entity_archetype_index(entity);
-            archetype_t* archetype       = &ecs->m_archetypes[archetype_index];
-            s_rem_tag(archetype, entity, tg_index);
+            archetype_t* archetype = s_get_alive_archetype(ecs, entity);
+            if (archetype == nullptr || tg_index >= archetype->m_max_global_tag_types)
+                return;
+            const u8 tag_type_index = archetype->m_global_to_local_tag_type[tg_index];
+            if (tag_type_index != 0xFF)
+                s_rem_tag(archetype, entity, tag_type_index);
         }
 
         en_iterator_t::en_iterator_t(ecs_t* ecs, u8 archetype_index)
@@ -522,11 +607,18 @@ namespace ncore
             , m_ref_tag_occupancy(0)
             , m_entity_index(-1)
         {
-            m_archetype_index   = archetype_index;
-            m_archetype         = &ecs->m_archetypes[m_archetype_index];
+            m_archetype_index = archetype_index;
+            if (archetype_index < ecs->m_archetypes_capacity && ecs->m_archetypes[archetype_index].m_archetype_arena != nullptr)
+                m_archetype = &ecs->m_archetypes[m_archetype_index];
         }
 
-        entity_t en_iterator_t::entity() const { return m_entity_index >= 0 ? s_entity_make(0, m_archetype_index, m_entity_index) : ECS_ENTITY_NULL; }
+        entity_t en_iterator_t::entity() const
+        {
+            if (m_archetype == nullptr || m_entity_index < 0)
+                return ECS_ENTITY_NULL;
+            const u8 generation = narena::base_ptr_as<const u8>(m_archetype->m_generation)[m_entity_index];
+            return s_entity_make(generation, m_archetype_index, m_entity_index);
+        }
 
         void en_iterator_t::mark_cp(u32 cp_index)
         {
@@ -542,51 +634,43 @@ namespace ncore
         {
             if (m_archetype == nullptr)
                 return;
-            ASSERT(tg_index < m_archetype->m_per_entity_tags);
+            ASSERT(tg_index < m_archetype->m_max_global_tag_types);
+            if (tg_index >= m_archetype->m_max_global_tag_types)
+                return;
             const u8 tag_type_index = m_archetype->m_global_to_local_tag_type[tg_index];
             ASSERT(tag_type_index != 0xFF);
             m_ref_tag_occupancy |= ((u32)1 << tag_type_index);
         }
 
-
         void en_iterator_t::begin()
         {
             // Start from the first alive entity
-            m_entity_index = find(0);
+            m_entity_index = m_archetype != nullptr ? find(0) : -1;
         }
 
         s32 en_iterator_t::find(s32 entity_index) const
         {
-            if (m_ref_cp_occupancy == 0 && m_ref_tag_occupancy == 0)
+            while (entity_index >= 0 && (u32)entity_index < m_archetype->m_free_index)
             {
-                if (entity_index >= 0)
-                    entity_index = nstatevec18::find_used_after(&m_archetype->m_free_bin0, m_archetype->m_free_bin1, &m_archetype->m_alive_bin0, m_archetype->m_alive_bin1, narena::base_ptr_as<u64>(m_archetype->m_bin2), m_archetype->m_free_index, entity_index);
-                return entity_index;
-            }
-
-            while (entity_index >= 0)
-            {
-                u64 const* cur_cp_occupancy = (u64*)&m_archetype->m_cp_occupancy->m_base[entity_index * sizeof(u64)];
-                if ((*cur_cp_occupancy & m_ref_cp_occupancy) == m_ref_cp_occupancy)
+                const bool alive = nstatevec18::get(&m_archetype->m_free_bin0, m_archetype->m_free_bin1, &m_archetype->m_alive_bin0, m_archetype->m_alive_bin1, m_archetype->m_bin2, m_archetype->m_free_index, entity_index);
+                if (alive)
                 {
-                    u32 cur_tag_occupancy = 0;
-                    switch (m_archetype->m_per_entity_tags)
+                    u64 const* cur_cp_occupancy = (u64*)&m_archetype->m_cp_occupancy->m_base[entity_index * sizeof(u64)];
+                    if ((*cur_cp_occupancy & m_ref_cp_occupancy) == m_ref_cp_occupancy)
                     {
-                        case 8: cur_tag_occupancy = ((u8*)m_archetype->m_tags->m_base)[entity_index]; break;
-                        case 16: cur_tag_occupancy = ((u16*)m_archetype->m_tags->m_base)[entity_index]; break;
-                        case 24:
-                            cur_tag_occupancy = m_archetype->m_tags->m_base[entity_index];
-                            cur_tag_occupancy = (cur_tag_occupancy << 8) | m_archetype->m_tags->m_base[entity_index + 1];
-                            cur_tag_occupancy = (cur_tag_occupancy << 8) | m_archetype->m_tags->m_base[entity_index + 2];
-                            break;
-                        case 32: cur_tag_occupancy = ((u32*)m_archetype->m_tags->m_base)[entity_index]; break;
+                        const u32   tag_stride     = m_archetype->m_per_entity_tags >> 3;
+                        byte const* entity_tags   = m_archetype->m_tags->m_base + (entity_index * tag_stride);
+                        u32         tag_occupancy = 0;
+                        for (u32 byte_index = 0; byte_index < tag_stride; ++byte_index)
+                            tag_occupancy |= ((u32)entity_tags[byte_index]) << (byte_index * 8);
+                        if ((tag_occupancy & m_ref_tag_occupancy) == m_ref_tag_occupancy)
+                            return entity_index;
                     }
-                    if ((cur_tag_occupancy & m_ref_tag_occupancy) == m_ref_tag_occupancy)
-                        return entity_index;
                 }
-                entity_index = nstatevec18::find_used_after(&m_archetype->m_free_bin0, m_archetype->m_free_bin1, &m_archetype->m_alive_bin0, m_archetype->m_alive_bin1, narena::base_ptr_as<u64>(m_archetype->m_bin2), m_archetype->m_free_index, entity_index + 1);
+                entity_index =
+                    nstatevec18::find_used_after(&m_archetype->m_free_bin0, m_archetype->m_free_bin1, &m_archetype->m_alive_bin0, m_archetype->m_alive_bin1, m_archetype->m_bin2, m_archetype->m_free_index, entity_index);
             }
-            return entity_index;
+            return -1;
         }
 
     } // namespace necs4

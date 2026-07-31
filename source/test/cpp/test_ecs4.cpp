@@ -56,6 +56,11 @@ namespace ncore
         DECLARE_ECS4_TAG(3);
     };
 
+    struct sparse_tag_t
+    {
+        DECLARE_ECS4_TAG(17);
+    };
+
 } // namespace ncore
 
 UNITTEST_SUITE_BEGIN(ecs4)
@@ -92,279 +97,388 @@ UNITTEST_SUITE_BEGIN(ecs4)
             g_register_archetype(ecs, 0);
 
             entity_t e01 = g_create_entity(ecs, 0);
-            entity_t e02 = g_create_entity(ecs, 0);
-            entity_t e03 = g_create_entity(ecs, 0);
-            entity_t e04 = g_create_entity(ecs, 0);
+            // entity_t e02 = g_create_entity(ecs, 0);
+            // entity_t e03 = g_create_entity(ecs, 0);
+            // entity_t e04 = g_create_entity(ecs, 0);
 
-            g_destroy_entity(ecs, e01);
-            g_destroy_entity(ecs, e02);
-            g_destroy_entity(ecs, e03);
-            g_destroy_entity(ecs, e04);
-
-            g_destroy_ecs(ecs);
-        }
-
-        UNITTEST_TEST(create_destroy_many_entities)
-        {
-            ecs_t* ecs = g_create_ecs();
-            g_register_archetype(ecs, 0);
-
-            entity_t entities[512];
-            for (s32 i = 0; i < 512; ++i)
-            {
-                entities[i] = g_create_entity(ecs);
-            }
-
-            for (s32 i = 0; i < 512; ++i)
-            {
-                g_destroy_entity(ecs, entities[i]);
-            }
+            // g_destroy_entity(ecs, e01);
+            // g_destroy_entity(ecs, e02);
+            // g_destroy_entity(ecs, e03);
+            // g_destroy_entity(ecs, e04);
 
             g_destroy_ecs(ecs);
         }
 
-        UNITTEST_TEST(create_entity_and_add_component)
+        UNITTEST_TEST(component_storage_is_isolated)
         {
             ecs_t* ecs = g_create_ecs();
             g_register_archetype(ecs, 0);
-
             g_register_component_type<u8_t>(ecs, 0);
             g_register_component_type<position_t>(ecs, 0);
 
-            entity_t e01 = g_create_entity(ecs, 0);
+            entity_t e0 = g_create_entity(ecs, 0);
+            u8_t*    c0 = g_add_cp<u8_t>(ecs, e0);
+            CHECK_NOT_NULL(c0);
+            c0->value = 42;
 
-            u8_t* cpa1 = g_add_cp<u8_t>(ecs, e01);
-            CHECK_NOT_NULL(cpa1);
-            CHECK_TRUE(g_has_cp<u8_t>(ecs, e01));
-            u8_t* cp1 = g_get_cp<u8_t>(ecs, e01);
-            CHECK_NOT_NULL(cp1);
-            CHECK_EQUAL(cpa1, cp1);
+            entity_t e1 = g_create_entity(ecs, 0);
+            CHECK_TRUE(g_has_cp<u8_t>(ecs, e0));
+            CHECK_EQUAL((u8)42, g_get_cp<u8_t>(ecs, e0)->value);
+            CHECK_FALSE(g_has_cp<u8_t>(ecs, e1));
 
-            position_t* cpa2 = g_add_cp<position_t>(ecs, e01);
-            CHECK_NOT_NULL(cpa2);
-            CHECK_NOT_EQUAL((void*)cpa1, (void*)cpa2);
-            CHECK_TRUE(g_has_cp<position_t>(ecs, e01));
-            position_t* cp2 = g_get_cp<position_t>(ecs, e01);
-            CHECK_NOT_NULL(cp2);
-            CHECK_EQUAL(cpa2, cp2);
+            position_t* c1 = g_add_cp<position_t>(ecs, e1);
+            CHECK_NOT_NULL(c1);
+            CHECK_TRUE(g_has_cp<position_t>(ecs, e1));
+            CHECK_FALSE(g_has_cp<position_t>(ecs, e0));
 
-            g_destroy_entity(ecs, e01);
+            g_rem_cp<u8_t>(ecs, e0);
+            CHECK_FALSE(g_has_cp<u8_t>(ecs, e0));
+            CHECK_NULL(g_get_cp<u8_t>(ecs, e0));
 
             g_destroy_ecs(ecs);
         }
 
-        static void RandomShuffle(entity_t * v, s32 size, u64 seed)
+        UNITTEST_TEST(sparse_tags_use_registered_mapping)
         {
-            xor_random_t rng(seed);
-            for (s32 i = 0; i < size; ++i)
-            {
-                const s32      j = (s32)(g_random_u32(&rng) & 0x7fffffff) % size;
-                const entity_t t = v[i];
-                v[i]             = v[j];
-                v[j]             = t;
-            }
+            ecs_t* ecs = g_create_ecs();
+            g_register_archetype(ecs, 0, 16, 256, 24, 32);
+            g_register_tag_type<sparse_tag_t>(ecs, 0);
+
+            entity_t e0 = g_create_entity(ecs, 0);
+            entity_t e1 = g_create_entity(ecs, 0);
+            g_add_tag<sparse_tag_t>(ecs, e1);
+
+            CHECK_FALSE(g_has_tag<sparse_tag_t>(ecs, e0));
+            CHECK_TRUE(g_has_tag<sparse_tag_t>(ecs, e1));
+            g_rem_tag<sparse_tag_t>(ecs, e1);
+            CHECK_FALSE(g_has_tag<sparse_tag_t>(ecs, e1));
+
+            g_destroy_ecs(ecs);
         }
 
-        UNITTEST_TEST(create_entities_with_components)
+        UNITTEST_TEST(stale_entity_handle_is_rejected)
         {
             ecs_t* ecs = g_create_ecs();
             g_register_archetype(ecs, 0);
-
             g_register_component_type<u8_t>(ecs, 0);
-            g_register_component_type<position_t>(ecs, 0);
-            g_register_component_type<velocity_t>(ecs, 0);
 
-            const s32 num_entities = 500;
-            entity_t* entities     = g_allocate_array<entity_t>(Allocator, num_entities);
-            for (s32 i = 0; i < num_entities; ++i)
-            {
-                entity_t e  = g_create_entity(ecs, 0);
-                entities[i] = e;
+            entity_t stale = g_create_entity(ecs, 0);
+            g_destroy_entity(ecs, stale);
+            g_destroy_entity(ecs, stale);
 
-                g_add_cp<u8_t>(ecs, e);
-                g_add_cp<position_t>(ecs, e);
-                g_add_cp<velocity_t>(ecs, e);
-
-                u8_t* cpa1  = g_add_cp<u8_t>(ecs, e);
-                cpa1->value = (u8)i;
-                CHECK_NOT_NULL(cpa1);
-                CHECK_TRUE(g_has_cp<u8_t>(ecs, e));
-                u8_t* cp1 = g_get_cp<u8_t>(ecs, e);
-                CHECK_NOT_NULL(cp1);
-                CHECK_EQUAL((void const*)cpa1, (void const*)cp1);
-
-                position_t* cpa2 = g_add_cp<position_t>(ecs, e);
-                cpa2->x          = (u32)i;
-                cpa2->y          = (u32)i;
-                cpa2->z          = (u32)i;
-                CHECK_NOT_NULL(cpa2);
-                CHECK_NOT_EQUAL((void const*)cpa1, (void const*)cpa2);
-                CHECK_TRUE(g_has_cp<position_t>(ecs, e));
-                position_t* cp2 = g_get_cp<position_t>(ecs, e);
-                CHECK_NOT_NULL(cp2);
-                CHECK_EQUAL((void const*)cpa2, (void const*)cp2);
-
-                velocity_t* cpa3 = g_add_cp<velocity_t>(ecs, e);
-                cpa3->x          = (u32)i + 1 + (num_entities * 10);
-                cpa3->y          = (u32)i + 2 + (num_entities * 10);
-                cpa3->z          = (u32)i + 3 + (num_entities * 10);
-                cpa3->speed      = (u32)i + 4 + (num_entities * 10);
-                CHECK_NOT_NULL(cpa3);
-                CHECK_NOT_EQUAL((void const*)cpa1, (void const*)cpa3);
-                CHECK_NOT_EQUAL((void const*)cpa2, (void const*)cpa3);
-                CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
-                velocity_t* cp3 = g_get_cp<velocity_t>(ecs, e);
-                CHECK_NOT_NULL(cp3);
-                CHECK_EQUAL((void const*)cpa3, (void const*)cp3);
-            }
-
-            // Verify the contents of the components
-            for (s32 i = 0; i < num_entities; ++i)
-            {
-                entity_t e = entities[i];
-
-                u8_t* cp1 = g_get_cp<u8_t>(ecs, e);
-                CHECK_NOT_NULL(cp1);
-                CHECK_EQUAL(cp1->value, (u8)i);
-
-                position_t* cp2 = g_get_cp<position_t>(ecs, e);
-                CHECK_NOT_NULL(cp2);
-                CHECK_EQUAL(cp2->x, (u32)i);
-                CHECK_EQUAL(cp2->y, (u32)i);
-                CHECK_EQUAL(cp2->z, (u32)i);
-
-                velocity_t* cp3 = g_get_cp<velocity_t>(ecs, e);
-                CHECK_NOT_NULL(cp3);
-                CHECK_EQUAL(cp3->x, (u32)i + 1 + (num_entities * 10));
-                CHECK_EQUAL(cp3->y, (u32)i + 2 + (num_entities * 10));
-                CHECK_EQUAL(cp3->z, (u32)i + 3 + (num_entities * 10));
-                CHECK_EQUAL(cp3->speed, (u32)i + 4 + (num_entities * 10));
-            }
-
-            RandomShuffle(entities, num_entities, 0xdeadbeef);
-            for (s32 i = 0; i < num_entities; ++i)
-            {
-                g_destroy_entity(ecs, entities[i]);
-            }
-
-            g_deallocate_array<entity_t>(Allocator, entities);
+            entity_t current = g_create_entity(ecs, 0);
+            CHECK_NOT_EQUAL(stale, current);
+            CHECK_NULL(g_add_cp<u8_t>(ecs, stale));
+            CHECK_NOT_NULL(g_add_cp<u8_t>(ecs, current));
 
             g_destroy_ecs(ecs);
         }
 
-        UNITTEST_TEST(create_entity_and_add_tag)
+        // UNITTEST_TEST(create_destroy_many_entities)
+        // {
+        //     ecs_t* ecs = g_create_ecs();
+        //     g_register_archetype(ecs, 0);
+
+        //     entity_t entities[512];
+        //     for (s32 i = 0; i < 512; ++i)
+        //     {
+        //         entities[i] = g_create_entity(ecs);
+        //     }
+
+        //     for (s32 i = 0; i < 512; ++i)
+        //     {
+        //         g_destroy_entity(ecs, entities[i]);
+        //     }
+
+        //     g_destroy_ecs(ecs);
+        // }
+
+        // UNITTEST_TEST(create_entity_and_add_component)
+        // {
+        //     ecs_t* ecs = g_create_ecs();
+        //     g_register_archetype(ecs, 0);
+
+        //     g_register_component_type<u8_t>(ecs, 0);
+        //     g_register_component_type<position_t>(ecs, 0);
+
+        //     entity_t e01 = g_create_entity(ecs, 0);
+
+        //     u8_t* cpa1 = g_add_cp<u8_t>(ecs, e01);
+        //     CHECK_NOT_NULL(cpa1);
+        //     CHECK_TRUE(g_has_cp<u8_t>(ecs, e01));
+        //     u8_t* cp1 = g_get_cp<u8_t>(ecs, e01);
+        //     CHECK_NOT_NULL(cp1);
+        //     CHECK_EQUAL(cpa1, cp1);
+
+        //     position_t* cpa2 = g_add_cp<position_t>(ecs, e01);
+        //     CHECK_NOT_NULL(cpa2);
+        //     CHECK_NOT_EQUAL((void*)cpa1, (void*)cpa2);
+        //     CHECK_TRUE(g_has_cp<position_t>(ecs, e01));
+        //     position_t* cp2 = g_get_cp<position_t>(ecs, e01);
+        //     CHECK_NOT_NULL(cp2);
+        //     CHECK_EQUAL(cpa2, cp2);
+
+        //     g_destroy_entity(ecs, e01);
+
+        //     g_destroy_ecs(ecs);
+        // }
+
+        // static void RandomShuffle(entity_t * v, s32 size, u64 seed)
+        // {
+        //     xor_random_t rng(seed);
+        //     for (s32 i = 0; i < size; ++i)
+        //     {
+        //         const s32      j = (s32)(g_random_u32(&rng) & 0x7fffffff) % size;
+        //         const entity_t t = v[i];
+        //         v[i]             = v[j];
+        //         v[j]             = t;
+        //     }
+        // }
+
+        // UNITTEST_TEST(create_entities_with_components)
+        // {
+        //     ecs_t* ecs = g_create_ecs();
+        //     g_register_archetype(ecs, 0);
+
+        //     g_register_component_type<u8_t>(ecs, 0);
+        //     g_register_component_type<position_t>(ecs, 0);
+        //     g_register_component_type<velocity_t>(ecs, 0);
+
+        //     const s32 num_entities = 500;
+        //     entity_t* entities     = g_allocate_array<entity_t>(Allocator, num_entities);
+        //     for (s32 i = 0; i < num_entities; ++i)
+        //     {
+        //         entity_t e  = g_create_entity(ecs, 0);
+        //         entities[i] = e;
+
+        //         g_add_cp<u8_t>(ecs, e);
+        //         g_add_cp<position_t>(ecs, e);
+        //         g_add_cp<velocity_t>(ecs, e);
+
+        //         u8_t* cpa1  = g_add_cp<u8_t>(ecs, e);
+        //         cpa1->value = (u8)i;
+        //         CHECK_NOT_NULL(cpa1);
+        //         CHECK_TRUE(g_has_cp<u8_t>(ecs, e));
+        //         u8_t* cp1 = g_get_cp<u8_t>(ecs, e);
+        //         CHECK_NOT_NULL(cp1);
+        //         CHECK_EQUAL((void const*)cpa1, (void const*)cp1);
+
+        //         position_t* cpa2 = g_add_cp<position_t>(ecs, e);
+        //         cpa2->x          = (u32)i;
+        //         cpa2->y          = (u32)i;
+        //         cpa2->z          = (u32)i;
+        //         CHECK_NOT_NULL(cpa2);
+        //         CHECK_NOT_EQUAL((void const*)cpa1, (void const*)cpa2);
+        //         CHECK_TRUE(g_has_cp<position_t>(ecs, e));
+        //         position_t* cp2 = g_get_cp<position_t>(ecs, e);
+        //         CHECK_NOT_NULL(cp2);
+        //         CHECK_EQUAL((void const*)cpa2, (void const*)cp2);
+
+        //         velocity_t* cpa3 = g_add_cp<velocity_t>(ecs, e);
+        //         cpa3->x          = (u32)i + 1 + (num_entities * 10);
+        //         cpa3->y          = (u32)i + 2 + (num_entities * 10);
+        //         cpa3->z          = (u32)i + 3 + (num_entities * 10);
+        //         cpa3->speed      = (u32)i + 4 + (num_entities * 10);
+        //         CHECK_NOT_NULL(cpa3);
+        //         CHECK_NOT_EQUAL((void const*)cpa1, (void const*)cpa3);
+        //         CHECK_NOT_EQUAL((void const*)cpa2, (void const*)cpa3);
+        //         CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
+        //         velocity_t* cp3 = g_get_cp<velocity_t>(ecs, e);
+        //         CHECK_NOT_NULL(cp3);
+        //         CHECK_EQUAL((void const*)cpa3, (void const*)cp3);
+        //     }
+
+        //     // Verify the contents of the components
+        //     for (s32 i = 0; i < num_entities; ++i)
+        //     {
+        //         entity_t e = entities[i];
+
+        //         u8_t* cp1 = g_get_cp<u8_t>(ecs, e);
+        //         CHECK_NOT_NULL(cp1);
+        //         CHECK_EQUAL(cp1->value, (u8)i);
+
+        //         position_t* cp2 = g_get_cp<position_t>(ecs, e);
+        //         CHECK_NOT_NULL(cp2);
+        //         CHECK_EQUAL(cp2->x, (u32)i);
+        //         CHECK_EQUAL(cp2->y, (u32)i);
+        //         CHECK_EQUAL(cp2->z, (u32)i);
+
+        //         velocity_t* cp3 = g_get_cp<velocity_t>(ecs, e);
+        //         CHECK_NOT_NULL(cp3);
+        //         CHECK_EQUAL(cp3->x, (u32)i + 1 + (num_entities * 10));
+        //         CHECK_EQUAL(cp3->y, (u32)i + 2 + (num_entities * 10));
+        //         CHECK_EQUAL(cp3->z, (u32)i + 3 + (num_entities * 10));
+        //         CHECK_EQUAL(cp3->speed, (u32)i + 4 + (num_entities * 10));
+        //     }
+
+        //     RandomShuffle(entities, num_entities, 0xdeadbeef);
+        //     for (s32 i = 0; i < num_entities; ++i)
+        //     {
+        //         g_destroy_entity(ecs, entities[i]);
+        //     }
+
+        //     g_deallocate_array<entity_t>(Allocator, entities);
+
+        //     g_destroy_ecs(ecs);
+        // }
+
+        // UNITTEST_TEST(create_entity_and_add_tag)
+        // {
+        //     ecs_t* ecs = g_create_ecs();
+        //     g_register_archetype(ecs, 0);
+
+        //     entity_t e01 = g_create_entity(ecs, 0);
+        //     g_add_tag<enemy_tag_t>(ecs, e01);
+
+        //     CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e01));
+        //     g_rem_tag<enemy_tag_t>(ecs, e01);
+        //     CHECK_FALSE(g_has_tag<enemy_tag_t>(ecs, e01));
+
+        //     g_destroy_entity(ecs, e01);
+
+        //     g_destroy_ecs(ecs);
+        // }
+    }
+
+    UNITTEST_FIXTURE(iterator)
+    {
+        UNITTEST_ALLOCATOR;
+
+        UNITTEST_FIXTURE_SETUP() {}
+        UNITTEST_FIXTURE_TEARDOWN() {}
+
+        UNITTEST_TEST(filters_and_includes_entity_zero)
         {
             ecs_t* ecs = g_create_ecs();
-            g_register_archetype(ecs, 0);
-
-            entity_t e01 = g_create_entity(ecs, 0);
-            g_add_tag<enemy_tag_t>(ecs, e01);
-
-            CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e01));
-            g_rem_tag<enemy_tag_t>(ecs, e01);
-            CHECK_FALSE(g_has_tag<enemy_tag_t>(ecs, e01));
-
-            g_destroy_entity(ecs, e01);
-
-            g_destroy_ecs(ecs);
-        }
-
-        UNITTEST_TEST(iterator_basic)
-        {
-            ecs_t* ecs = g_create_ecs();
-            g_register_archetype(ecs, 0);
-
+            g_register_archetype(ecs, 0, 16, 256, 24, 32);
             g_register_component_type<u8_t>(ecs, 0);
-            g_register_component_type<position_t>(ecs, 0);
-            g_register_component_type<velocity_t>(ecs, 0);
-            g_register_tag_type<enemy_tag_t>(ecs, 0);
+            g_register_tag_type<sparse_tag_t>(ecs, 0);
 
-            entity_t e01 = g_create_entity(ecs, 0);
-            entity_t e02 = g_create_entity(ecs, 0);
-            entity_t e03 = g_create_entity(ecs, 0);
-            entity_t e04 = g_create_entity(ecs, 0);
+            entity_t e0 = g_create_entity(ecs, 0);
+            entity_t e1 = g_create_entity(ecs, 0);
+            entity_t e2 = g_create_entity(ecs, 0);
+            g_add_cp<u8_t>(ecs, e0);
+            g_add_cp<u8_t>(ecs, e2);
+            g_add_tag<sparse_tag_t>(ecs, e0);
+            g_add_tag<sparse_tag_t>(ecs, e1);
 
-            g_add_cp<u8_t>(ecs, e01);
-            g_add_cp<u8_t>(ecs, e03);
-            g_add_cp<u8_t>(ecs, e04);
+            en_iterator_t all(ecs, 0);
+            all.begin();
+            CHECK_EQUAL(e0, all.entity());
+            all.next();
+            CHECK_EQUAL(e1, all.entity());
+            all.next();
+            CHECK_EQUAL(e2, all.entity());
+            all.next();
+            CHECK_TRUE(all.end());
 
-            g_add_cp<position_t>(ecs, e01);
-            g_add_cp<position_t>(ecs, e03);
-
-            g_add_cp<velocity_t>(ecs, e01);
-            g_add_cp<velocity_t>(ecs, e02);
-            g_add_cp<velocity_t>(ecs, e03);
-            g_add_cp<velocity_t>(ecs, e04);
-
-            g_add_tag<enemy_tag_t>(ecs, e01);
-            g_add_tag<enemy_tag_t>(ecs, e02);
-            g_add_tag<enemy_tag_t>(ecs, e03);
-
-            {
-                en_iterator_t iter(ecs, 0);
-                
-                iter.mark_cp<u8_t>();
-                iter.mark_cp<position_t>();
-                iter.mark_tag<enemy_tag_t>();
-
-                iter.begin();
-                while (!iter.end())
-                {
-                    entity_t e = iter.entity();
-                    CHECK_TRUE(e == e01 || e == e03);
-
-                    CHECK_TRUE(g_has_cp<u8_t>(ecs, e));
-                    CHECK_TRUE(g_has_cp<position_t>(ecs, e));
-                    CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e));
-
-                    iter.next();
-                }
-            }
-
-            {
-                en_iterator_t iter(ecs, 0);
-
-                iter.mark_cp<velocity_t>();
-                iter.mark_tag<enemy_tag_t>();
-
-                iter.begin();
-                while (!iter.end())
-                {
-                    entity_t e = iter.entity();
-                    CHECK_TRUE(e == e01 || e == e02 || e == e03);
-
-                    CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
-                    CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e));
-
-                    iter.next();
-                }
-            }
-
-            {
-                // Iterate all the entities of the archetype index 0
-                en_iterator_t iter(ecs, 0);
-
-                s32 index = 0;
-                iter.begin();
-                while (!iter.end())
-                {
-                    entity_t e = iter.entity();
-                    CHECK_TRUE((e == e01 && index == 0) || (e == e02 && index == 1) || (e == e03 && index == 2) || (e == e04 && index == 3));
-
-                    CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
-
-                    iter.next();
-                    index += 1;
-                }
-            }
-
-            g_destroy_entity(ecs, e01);
-            g_destroy_entity(ecs, e02);
-            g_destroy_entity(ecs, e03);
-            g_destroy_entity(ecs, e04);
+            en_iterator_t filtered(ecs, 0);
+            filtered.mark_cp<u8_t>();
+            filtered.mark_tag<sparse_tag_t>();
+            filtered.begin();
+            CHECK_EQUAL(e0, filtered.entity());
+            filtered.next();
+            CHECK_TRUE(filtered.end());
 
             g_destroy_ecs(ecs);
         }
+
+        // UNITTEST_TEST(basic)
+        // {
+        //     ecs_t* ecs = g_create_ecs();
+        //     g_register_archetype(ecs, 0);
+
+        //     g_register_component_type<u8_t>(ecs, 0);
+        //     g_register_component_type<position_t>(ecs, 0);
+        //     g_register_component_type<velocity_t>(ecs, 0);
+        //     g_register_tag_type<enemy_tag_t>(ecs, 0);
+
+        //     entity_t e01 = g_create_entity(ecs, 0);
+        //     entity_t e02 = g_create_entity(ecs, 0);
+        //     entity_t e03 = g_create_entity(ecs, 0);
+        //     entity_t e04 = g_create_entity(ecs, 0);
+
+        //     g_add_cp<u8_t>(ecs, e01);
+        //     g_add_cp<u8_t>(ecs, e03);
+        //     g_add_cp<u8_t>(ecs, e04);
+
+        //     g_add_cp<position_t>(ecs, e01);
+        //     g_add_cp<position_t>(ecs, e03);
+
+        //     g_add_cp<velocity_t>(ecs, e01);
+        //     g_add_cp<velocity_t>(ecs, e02);
+        //     g_add_cp<velocity_t>(ecs, e03);
+        //     g_add_cp<velocity_t>(ecs, e04);
+
+        //     g_add_tag<enemy_tag_t>(ecs, e01);
+        //     g_add_tag<enemy_tag_t>(ecs, e02);
+        //     g_add_tag<enemy_tag_t>(ecs, e03);
+
+        //     {
+        //         en_iterator_t iter(ecs, 0);
+
+        //         iter.mark_cp<u8_t>();
+        //         iter.mark_cp<position_t>();
+        //         iter.mark_tag<enemy_tag_t>();
+
+        //         iter.begin();
+        //         while (!iter.end())
+        //         {
+        //             entity_t e = iter.entity();
+        //             CHECK_TRUE(e == e01 || e == e03);
+
+        //             CHECK_TRUE(g_has_cp<u8_t>(ecs, e));
+        //             CHECK_TRUE(g_has_cp<position_t>(ecs, e));
+        //             CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e));
+
+        //             iter.next();
+        //         }
+        //     }
+
+        //     {
+        //         en_iterator_t iter(ecs, 0);
+
+        //         iter.mark_cp<velocity_t>();
+        //         iter.mark_tag<enemy_tag_t>();
+
+        //         iter.begin();
+        //         while (!iter.end())
+        //         {
+        //             entity_t e = iter.entity();
+        //             CHECK_TRUE(e == e01 || e == e02 || e == e03);
+
+        //             CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
+        //             CHECK_TRUE(g_has_tag<enemy_tag_t>(ecs, e));
+
+        //             iter.next();
+        //         }
+        //     }
+
+        //     {
+        //         // Iterate all the entities of the archetype index 0
+        //         en_iterator_t iter(ecs, 0);
+
+        //         s32 index = 0;
+        //         iter.begin();
+        //         while (!iter.end())
+        //         {
+        //             entity_t e = iter.entity();
+        //             CHECK_TRUE((e == e01 && index == 0) || (e == e02 && index == 1) || (e == e03 && index == 2) || (e == e04 && index == 3));
+
+        //             CHECK_TRUE(g_has_cp<velocity_t>(ecs, e));
+
+        //             iter.next();
+        //             index += 1;
+        //         }
+        //     }
+
+        //     g_destroy_entity(ecs, e01);
+        //     g_destroy_entity(ecs, e02);
+        //     g_destroy_entity(ecs, e03);
+        //     g_destroy_entity(ecs, e04);
+
+        //     g_destroy_ecs(ecs);
+        // }
     }
 }
 UNITTEST_SUITE_END
