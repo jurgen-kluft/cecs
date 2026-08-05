@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jurgen-kluft/gide/denv"
-	"github.com/jurgen-kluft/gide/msdev"
+	"github.com/jurgen-kluft/go-ide/denv"
+	"github.com/jurgen-kluft/go-ide/msdev"
 )
 
 func TestGenerateMsdevPackage(t *testing.T) {
