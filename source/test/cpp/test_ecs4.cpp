@@ -1,6 +1,5 @@
 #include "ccore/c_target.h"
 #include "ccore/c_allocator.h"
-#include "cbase/c_buffer.h"
 #include "ccore/c_random.h"
 #include "cecs/c_ecs4.h"
 
@@ -67,7 +66,7 @@ UNITTEST_SUITE_BEGIN(ecs4)
 {
     UNITTEST_FIXTURE(main)
     {
-        UNITTEST_ALLOCATOR;
+        //UNITTEST_ALLOCATOR;
 
         UNITTEST_FIXTURE_SETUP() {}
         UNITTEST_FIXTURE_TEARDOWN() {}
@@ -97,14 +96,14 @@ UNITTEST_SUITE_BEGIN(ecs4)
             g_register_archetype(ecs, 0);
 
             entity_t e01 = g_create_entity(ecs, 0);
-            // entity_t e02 = g_create_entity(ecs, 0);
-            // entity_t e03 = g_create_entity(ecs, 0);
-            // entity_t e04 = g_create_entity(ecs, 0);
+            entity_t e02 = g_create_entity(ecs, 0);
+            entity_t e03 = g_create_entity(ecs, 0);
+            entity_t e04 = g_create_entity(ecs, 0);
 
-            // g_destroy_entity(ecs, e01);
-            // g_destroy_entity(ecs, e02);
-            // g_destroy_entity(ecs, e03);
-            // g_destroy_entity(ecs, e04);
+            g_destroy_entity(ecs, e01);
+            g_destroy_entity(ecs, e02);
+            g_destroy_entity(ecs, e03);
+            g_destroy_entity(ecs, e04);
 
             g_destroy_ecs(ecs);
         }
@@ -342,7 +341,7 @@ UNITTEST_SUITE_BEGIN(ecs4)
 
     UNITTEST_FIXTURE(iterator)
     {
-        UNITTEST_ALLOCATOR;
+        //UNITTEST_ALLOCATOR;
 
         UNITTEST_FIXTURE_SETUP() {}
         UNITTEST_FIXTURE_TEARDOWN() {}
